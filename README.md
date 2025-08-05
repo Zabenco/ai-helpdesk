@@ -123,7 +123,7 @@ Create emergency or priority responses in `overrides.json`:
 
 ```json
 {
-  "emergency": "🚨 EMERGENCY: Call 911 immediately!",
+  "emergency": "EMERGENCY: Call 911 immediately!",
   "password": "For password issues, contact IT at ext. 1234",
   "server down": "Check the server status dashboard first: http://status.company.com"
 }
@@ -159,7 +159,7 @@ Interactive API documentation (Swagger UI)
 ### `GET /redoc`
 Alternative API documentation (ReDoc)
 
-## 🛠️ Development
+## Development
 
 ### Adding New Features
 
