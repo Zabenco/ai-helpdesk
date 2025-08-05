@@ -1,9 +1,6 @@
-# Virtual Environment
 venv/
 .venv/
 env/
-
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -24,22 +21,14 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# Generated Index Files (Large vector databases)
 index/
 *.index
-
-# Configuration Files (may contain sensitive info)
 overrides.json
-
-# IDE/Editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -47,18 +36,10 @@ overrides.json
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Logs
 *.log
 logs/
-
-# Environment Variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-
-# Test Documents (if you have sensitive ones)
-# docs/
-# Uncomment above if your docs contain sensitive data
