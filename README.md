@@ -15,6 +15,8 @@
 
 ### Prerequisites
 
+#### Quick note: Some computers cannot run this with llama3, make sure you have relatively good specifications and open resources, and maybe change the llm if need be
+
 1. **Install Ollama** (https://ollama.ai)
 2. **Download AI Models -I use Llama3-**:
    ```bash
