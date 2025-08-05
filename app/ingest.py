@@ -10,8 +10,8 @@ from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.core.settings import Settings
 from llama_index.core.schema import Document
 
-DOCS_DIR = "docs"
-INDEX_DIR = "index"
+DOCS_DIR = "..\\docs"
+INDEX_DIR = "..\\index"
 EMBED_MODEL_NAME = "nomic-embed-text"
 
 # Setup the embedding model here
