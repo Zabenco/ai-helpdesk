@@ -57,14 +57,14 @@
    └── procedures.csv
    ```
 
-2. **Have the AI read and index your decs**:
+2. **Have the AI read and index your decs** (Make sure you are inside your virtual environment:
    ```bash
    python app/ingest.py
    ```
 
 ### Run the Helpdesk
 
-1. **Start Ollama** (if not already running):
+1. **Start Ollama** (if not already running, also doesn't need to be in a virtual environment):
    ```bash
    ollama serve
    ```
