@@ -9,7 +9,7 @@ from llama_index.core import (
     Settings,
 )
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.base.embeddings.base import Embedding
+from llama_index.core.base.embeddings.base import BaseEmbedding
 
 # Resolve paths relative to this script's location, not CWD
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,7 +33,7 @@ MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimax.chat/v1")
 
 
-class CustomEmbedding(Embedding):
+class CustomEmbedding(BaseEmbedding):
     """Custom embedding class that calls OpenAI-compatible API directly.
     
     Bypasses llama-index's hardcoded model enum to support any
@@ -41,6 +41,7 @@ class CustomEmbedding(Embedding):
     """
     
     def __init__(self, api_key: str, api_base: str, model: str):
+        super().__init__()
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
         self.model = model
