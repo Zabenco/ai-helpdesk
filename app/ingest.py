@@ -61,6 +61,9 @@ class CustomEmbedding(BaseEmbedding):
         response.raise_for_status()
         return response.json()["data"][0]["embedding"]
     
+    async def _aget_text_embedding(self, text: str) -> list[float]:
+        return self._get_text_embedding(text)
+    
     def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
         response = requests.post(
             f"{self.api_base}/embeddings",
@@ -75,8 +78,16 @@ class CustomEmbedding(BaseEmbedding):
         )
         response.raise_for_status()
         data = response.json()["data"]
-        # Sort by index to maintain order
         return [d["embedding"] for d in sorted(data, key=lambda x: x["index"])]
+    
+    async def _aget_text_embeddings(self, texts: list[str]) -> list[list[float]]:
+        return self._get_text_embeddings(texts)
+    
+    def _get_query_embedding(self, query: str) -> list[float]:
+        return self._get_text_embedding(query)
+    
+    async def _aget_query_embedding(self, query: str) -> list[float]:
+        return self._get_text_embedding(query)
 
 
 def setup_embedding_model():
