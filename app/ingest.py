@@ -9,8 +9,12 @@ from llama_index.core import (
 from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 
-DOCS_DIR = "../docs"
-INDEX_DIR = "../index"
+# Resolve paths relative to this script's location, not CWD
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
+INDEX_DIR = os.path.join(PROJECT_ROOT, "index")
 EMBED_MODEL_NAME = "nomic-embed-text"
 
 # Chunking configuration
