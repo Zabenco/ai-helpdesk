@@ -197,6 +197,8 @@ def load_index():
         return None
     
     print("[Ingest] Loading index from disk...")
+    # Ensure embed model is set before loading (needed for re-embedding on load)
+    setup_embedding_model()
     storage_context = StorageContext.from_defaults(persist_dir=INDEX_DIR)
     return load_index_from_storage(storage_context)
 

@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core.memory import ChatMemoryBuffer
-from llama_index.core.schema import ChatMessage
+from llama_index.core.base.llms.types import ChatMessage
 
 from app.ingest import load_index
 from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER, DEFAULT_MODEL_NAME
