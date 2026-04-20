@@ -1,4 +1,5 @@
 import os
+import requests
 from dotenv import load_dotenv
 from llama_index.core import (
     VectorStoreIndex,
@@ -8,6 +9,7 @@ from llama_index.core import (
     Settings,
 )
 from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.base.embeddings.base import Embedding
 
 # Resolve paths relative to this script's location, not CWD
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,12 +26,57 @@ CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "1024"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "256"))
 
 # Embedding model configuration
-# Supports: "ollama" (local) or "openai" (works with MiniMax, OpenAI, etc.)
 EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "ollama")
 EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimax.chat/v1")
+
+
+class CustomEmbedding(Embedding):
+    """Custom embedding class that calls OpenAI-compatible API directly.
+    
+    Bypasses llama-index's hardcoded model enum to support any
+    OpenAI-compatible embedding model (MiniMax, local proxies, etc.)
+    """
+    
+    def __init__(self, api_key: str, api_base: str, model: str):
+        self.api_key = api_key
+        self.api_base = api_base.rstrip("/")
+        self.model = model
+    
+    def _get_text_embedding(self, text: str) -> list[float]:
+        response = requests.post(
+            f"{self.api_base}/embeddings",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model,
+                "input": text,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["data"][0]["embedding"]
+    
+    def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
+        response = requests.post(
+            f"{self.api_base}/embeddings",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model,
+                "input": texts,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()["data"]
+        # Sort by index to maintain order
+        return [d["embedding"] for d in sorted(data, key=lambda x: x["index"])]
+
 
 def setup_embedding_model():
     """Configure the embedding model based on provider."""
@@ -37,14 +84,13 @@ def setup_embedding_model():
         from llama_index.embeddings.ollama import OllamaEmbedding
         Settings.embed_model = OllamaEmbedding(model_name=EMBED_MODEL_NAME)
     elif EMBED_PROVIDER == "openai":
-        from llama_index.embeddings.openai import OpenAIEmbedding
         # Use MiniMax API if key is set, otherwise falls back to OpenAI
         api_key = MINIMAX_API_KEY or OPENAI_API_KEY
         api_base = MINIMAX_API_BASE if MINIMAX_API_KEY else "https://api.openai.com/v1"
-        Settings.embed_model = OpenAIEmbedding(
-            model=EMBED_MODEL_NAME,
+        Settings.embed_model = CustomEmbedding(
             api_key=api_key,
             api_base=api_base,
+            model=EMBED_MODEL_NAME,
         )
     else:
         raise ValueError(f"Unknown EMBED_PROVIDER: {EMBED_PROVIDER}")
