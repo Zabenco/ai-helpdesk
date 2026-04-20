@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,39 +31,42 @@ class AskRequest(BaseModel):
     question: str
     user_id: str = "default"
 
+def build_prompt(question: str, history: list, override: str | None) -> str:
+    """Build the prompt with history and override context."""
+    history_str = ""
+    for q, a in history:
+        history_str += f"\nPrevious question: {q}\nPrevious answer: {a}\n"
+
+    if override:
+        return (
+            f"Chat history for context: {history_str}"
+            f"Authoritative information: {override} "
+            f"User question: {question}"
+        )
+    else:
+        return (
+            f"Chat history for context: {history_str}"
+            f"User question: {question}"
+        )
+
 @app.post("/ask")
 async def ask(request: AskRequest):
+    """Standard non-streaming response with full metadata."""
     if not query_engine:
         return {"error": "No index loaded. Run the ingest script first."}
 
     print(f"[ASK] Question received: {request.question}")
 
-    # This builds a chat history string
     history = chat_histories.get(request.user_id, [])
-
-    # Add chat history context (if you want to include it in future)
-    history_str = ""
-    for q, a in history:
-        history_str += f"\nPrevious question: {q}\nPrevious answer: {a}\n"
-
-    # This part checks for any overrides via a json file
     override = get_override_for_question(request.question)
 
     if override:
         print(f"[ASK] Override found and applied: {override}")
-        modified_prompt = (
-            f"Chat history for context: {history_str}"
-            f"Authoritative information: {override} "
-            f"User question: {request.question}"
-        )
-    else:
-        modified_prompt = (
-            f"Chat history for context: {history_str}"
-            f"User question: {request.question}"
-        )
 
-    # Asks the question
-    response = query_engine.query(modified_prompt)
+    prompt = build_prompt(request.question, history, override)
+
+    # Full response collected
+    response = query_engine.query(prompt)
     answer_text = str(response)
 
     # Update chat history
@@ -75,3 +79,41 @@ async def ask(request: AskRequest):
         "override_used": bool(override),
         "sources": [node.metadata for node in response.source_nodes] if hasattr(response, 'source_nodes') else [],
     }
+
+@app.post("/ask/stream")
+async def ask_stream(request: AskRequest):
+    """Streaming response for real-time answer delivery."""
+    if not query_engine:
+        return {"error": "No index loaded. Run the ingest script first."}
+
+    print(f"[ASK/STREAM] Question received: {request.question}")
+
+    history = chat_histories.get(request.user_id, [])
+    override = get_override_for_question(request.question)
+
+    if override:
+        print(f"[ASK/STREAM] Override found and applied: {override}")
+
+    prompt = build_prompt(request.question, history, override)
+
+    async def generate():
+        full_response = ""
+        # Stream the response
+        streaming_response = query_engine.query(prompt, stream=True)
+        async for chunk in streaming_response.response_gen:
+            full_response += str(chunk)
+            yield chunk
+
+        # Update chat history after streaming completes
+        history.append((request.question, full_response))
+        chat_histories[request.user_id] = history[-MAX_HISTORY_LENGTH:]
+
+    return StreamingResponse(generate(), media_type="text/plain")
+
+@app.delete("/history/{user_id}")
+async def clear_history(user_id: str):
+    """Clear a user's chat history."""
+    if user_id in chat_histories:
+        del chat_histories[user_id]
+        return {"status": "ok", "message": f"History cleared for {user_id}"}
+    return {"status": "ok", "message": f"No history found for {user_id}"}
