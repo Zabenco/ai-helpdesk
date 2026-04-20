@@ -1,9 +1,5 @@
 import os
 from dotenv import load_dotenv
-
-# Load .env file if it exists
-load_dotenv()
-
 from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
@@ -16,6 +12,9 @@ from llama_index.core.node_parser import SentenceSplitter
 # Resolve paths relative to this script's location, not CWD
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+# Load .env file from project root
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
 INDEX_DIR = os.path.join(PROJECT_ROOT, "index")
