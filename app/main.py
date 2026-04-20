@@ -4,8 +4,7 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ingest import load_index
-from llama_index.llms.ollama import Ollama
-from app.overrides import get_override_for_question
+from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER, DEFAULT_MODEL_NAME
 
 chat_histories = {}
 MAX_HISTORY_LENGTH = 6
@@ -14,7 +13,7 @@ MAX_HISTORY_LENGTH = 6
 index = load_index()
 query_engine = None
 if index:
-    llm = Ollama(model="llama3")
+    llm = get_llm()
     query_engine = index.as_query_engine(llm=llm)
 
 app = FastAPI(title="Universal AI Assistant")
@@ -30,6 +29,10 @@ app.add_middleware(
 class AskRequest(BaseModel):
     question: str
     user_id: str = "default"
+
+class ModelRequest(BaseModel):
+    provider: str = DEFAULT_MODEL_PROVIDER
+    model: str = DEFAULT_MODEL_NAME
 
 def build_prompt(question: str, history: list, override: str | None) -> str:
     """Build the prompt with history and override context."""
@@ -117,3 +120,17 @@ async def clear_history(user_id: str):
         del chat_histories[user_id]
         return {"status": "ok", "message": f"History cleared for {user_id}"}
     return {"status": "ok", "message": f"No history found for {user_id}"}
+
+@app.get("/models")
+async def list_models():
+    """List available LLM providers and their status."""
+    return {
+        "current": {
+            "provider": DEFAULT_MODEL_PROVIDER,
+            "model": DEFAULT_MODEL_NAME,
+        },
+        "available": get_available_providers(),
+    }
+
+# Import at bottom to avoid circular import
+from app.overrides import get_override_for_question

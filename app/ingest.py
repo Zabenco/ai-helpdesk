@@ -3,16 +3,19 @@ from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
     StorageContext,
-    load_index_from_storage
+    load_index_from_storage,
+    Settings,
 )
 from llama_index.embeddings.ollama import OllamaEmbedding
-from llama_index.core.node_parser import SimpleNodeParser
-from llama_index.core.settings import Settings
-from llama_index.core.schema import Document
+from llama_index.core.node_parser import SentenceSplitter
 
 DOCS_DIR = "../docs"
 INDEX_DIR = "../index"
 EMBED_MODEL_NAME = "nomic-embed-text"
+
+# Chunking configuration
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "1024"))
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "256"))
 
 # Setup the embedding model here
 Settings.embed_model = OllamaEmbedding(model_name=EMBED_MODEL_NAME)
@@ -38,8 +41,17 @@ def build_index():
         print("[Ingest] Keeping it real, there isn't anything to index :(")
         return
     
-    print("[Ingest] Building vector index...")
-    index = VectorStoreIndex.from_documents(documents)
+    # Configure chunking
+    node_parser = SentenceSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP
+    )
+    
+    print(f"[Ingest] Building vector index with chunk_size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP}...")
+    index = VectorStoreIndex.from_documents(
+        documents,
+        node_parser=node_parser,
+    )
 
     print("[Ingest] Saving built index to your disk...")
     index.storage_context.persist(persist_dir=INDEX_DIR)
