@@ -1,5 +1,6 @@
 import os
 import requests
+from typing import Any
 from dotenv import load_dotenv
 from llama_index.core import (
     VectorStoreIndex,
@@ -39,22 +40,33 @@ class CustomEmbedding(BaseEmbedding):
     Bypasses llama-index's hardcoded model enum to support any
     OpenAI-compatible embedding model (MiniMax, local proxies, etc.)
     """
+    model_config = {
+        "extra": "allow",  # Allow extra fields not defined in parent
+    }
     
-    def __init__(self, api_key: str, api_base: str, model: str):
-        super().__init__()
-        self.api_key = api_key
-        self.api_base = api_base.rstrip("/")
-        self.model = model
+    def __init__(
+        self,
+        api_key: str,
+        api_base: str,
+        model: str,
+        embed_batch_size: int = 10,
+        **kwargs: Any,
+    ):
+        # Initialize with dummy model_name to satisfy Pydantic
+        super().__init__(model_name=model, embed_batch_size=embed_batch_size, **kwargs)
+        self._api_key = api_key
+        self._api_base = api_base.rstrip("/")
+        self._model = model
     
     def _get_text_embedding(self, text: str) -> list[float]:
         response = requests.post(
-            f"{self.api_base}/embeddings",
+            f"{self._api_base}/embeddings",
             headers={
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": self.model,
+                "model": self._model,
                 "input": text,
             },
         )
@@ -66,13 +78,13 @@ class CustomEmbedding(BaseEmbedding):
     
     def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
         response = requests.post(
-            f"{self.api_base}/embeddings",
+            f"{self._api_base}/embeddings",
             headers={
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": self.model,
+                "model": self._model,
                 "input": texts,
             },
         )
@@ -107,28 +119,40 @@ def setup_embedding_model():
     else:
         raise ValueError(f"Unknown EMBED_PROVIDER: {EMBED_PROVIDER}")
 
-# Setup embedding model on import
-setup_embedding_model()
 
-# Load valid documents from the docs folder, including subfolders
+# Supported file extensions
+SUPPORTED_EXTENSIONS = [".txt", ".pdf", ".md", ".csv", ".docx", ".pptx", ".xlsx"]
+
+
 def load_documents():
+    """Load all supported documents from the docs directory."""
+    if not os.path.exists(DOCS_DIR):
+        print(f"[Ingest] Docs directory not found: {DOCS_DIR}")
+        return []
+    
+    file_count = len([f for f in os.listdir(DOCS_DIR) if os.path.isfile(os.path.join(DOCS_DIR, f))])
+    print(f"[Ingest] Found {file_count} files in docs directory")
+    
     reader = SimpleDirectoryReader(
         input_dir=DOCS_DIR,
         recursive=True,
-        required_exts=[".txt", ".pdf", ".md", ".csv"],
+        exclude_hidden=False,  # Don't exclude hidden files
+        exclude=None,         # Don't exclude any files by pattern
+        required_exts=SUPPORTED_EXTENSIONS,
     )
     docs = reader.load_data()
     return docs
 
-# Where the magic happens, building the index from the documents
+
 def build_index():
+    """Build the vector index from documents."""
     print("[Ingest] Loading all documents")
     documents = load_documents()
 
     print(f"[Ingest] Loaded {len(documents)} documents")
 
     if not documents:
-        print("[Ingest] Keeping it real, there isn't anything to index :(")
+        print("[Ingest] No documents to index. Add files to the docs folder and try again.")
         return
     
     # Configure chunking
@@ -139,25 +163,33 @@ def build_index():
     
     print(f"[Ingest] Building vector index with chunk_size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP}...")
     print(f"[Ingest] Using embedding provider: {EMBED_PROVIDER}, model: {EMBED_MODEL_NAME}")
+    
+    # Only setup embedding if not already done
+    if Settings.embed_model is None:
+        setup_embedding_model()
+    
     index = VectorStoreIndex.from_documents(
         documents,
         node_parser=node_parser,
     )
 
     print("[Ingest] Saving built index to your disk...")
+    os.makedirs(INDEX_DIR, exist_ok=True)
     index.storage_context.persist(persist_dir=INDEX_DIR)
 
-    print("[Ingest] All done")
+    print("[Ingest] All done! Your helpdesk is ready.")
 
 
 def load_index():
+    """Load the existing vector index."""
     if not os.path.exists(INDEX_DIR):
-        print("[Ingest] No index found anywhere. You gotta run 'build_index()' first.")
+        print("[Ingest] No index found. Run 'build_index()' first.")
         return None
     
     print("[Ingest] Loading index from disk...")
     storage_context = StorageContext.from_defaults(persist_dir=INDEX_DIR)
     return load_index_from_storage(storage_context)
+
 
 if __name__ == "__main__":
     build_index()
