@@ -2,12 +2,15 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.core.schema import ChatMessage
 
 from app.ingest import load_index
 from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER, DEFAULT_MODEL_NAME
 
-chat_histories = {}
-MAX_HISTORY_LENGTH = 6
+# Per-user chat memory buffers
+user_memories: dict[str, ChatMemoryBuffer] = {}
+MAX_TOKENS = int(__import__("os").environ.get("MEMORY_TOKEN_LIMIT", "4096"))
 
 # Load the index
 index = load_index()
@@ -34,21 +37,30 @@ class ModelRequest(BaseModel):
     provider: str = DEFAULT_MODEL_PROVIDER
     model: str = DEFAULT_MODEL_NAME
 
-def build_prompt(question: str, history: list, override: str | None) -> str:
-    """Build the prompt with history and override context."""
-    history_str = ""
-    for q, a in history:
-        history_str += f"\nPrevious question: {q}\nPrevious answer: {a}\n"
+def get_memory(user_id: str) -> ChatMemoryBuffer:
+    """Get or create a chat memory buffer for a user."""
+    if user_id not in user_memories:
+        llm = get_llm()
+        user_memories[user_id] = ChatMemoryBuffer.from_defaults(
+            llm=llm,
+            token_limit=MAX_TOKENS
+        )
+    return user_memories[user_id]
 
+def build_prompt(question: str, memory: ChatMemoryBuffer, override: str | None) -> str:
+    """Build the prompt with memory context and override."""
+    # Get relevant chat history from memory buffer
+    memory_str = memory.get()
+    
     if override:
         return (
-            f"Chat history for context: {history_str}"
-            f"Authoritative information: {override} "
+            f"Chat history for context: {memory_str}\n"
+            f"Authoritative information: {override}\n"
             f"User question: {question}"
         )
     else:
         return (
-            f"Chat history for context: {history_str}"
+            f"Chat history for context: {memory_str}\n"
             f"User question: {question}"
         )
 
@@ -60,21 +72,21 @@ async def ask(request: AskRequest):
 
     print(f"[ASK] Question received: {request.question}")
 
-    history = chat_histories.get(request.user_id, [])
+    memory = get_memory(request.user_id)
     override = get_override_for_question(request.question)
 
     if override:
         print(f"[ASK] Override found and applied: {override}")
 
-    prompt = build_prompt(request.question, history, override)
+    prompt = build_prompt(question=request.question, memory=memory, override=override)
 
     # Full response collected
     response = query_engine.query(prompt)
     answer_text = str(response)
 
-    # Update chat history
-    history.append((request.question, answer_text))
-    chat_histories[request.user_id] = history[-MAX_HISTORY_LENGTH:]
+    # Store the conversation in memory
+    memory.put(ChatMessage(role="user", content=request.question))
+    memory.put(ChatMessage(role="assistant", content=answer_text))
 
     return {
         "question": request.question,
@@ -91,13 +103,13 @@ async def ask_stream(request: AskRequest):
 
     print(f"[ASK/STREAM] Question received: {request.question}")
 
-    history = chat_histories.get(request.user_id, [])
+    memory = get_memory(request.user_id)
     override = get_override_for_question(request.question)
 
     if override:
         print(f"[ASK/STREAM] Override found and applied: {override}")
 
-    prompt = build_prompt(request.question, history, override)
+    prompt = build_prompt(question=request.question, memory=memory, override=override)
 
     async def generate():
         full_response = ""
@@ -107,19 +119,27 @@ async def ask_stream(request: AskRequest):
             full_response += str(chunk)
             yield chunk
 
-        # Update chat history after streaming completes
-        history.append((request.question, full_response))
-        chat_histories[request.user_id] = history[-MAX_HISTORY_LENGTH:]
+        # Store the conversation in memory after streaming completes
+        memory.put(ChatMessage(role="user", content=request.question))
+        memory.put(ChatMessage(role="assistant", content=full_response))
 
     return StreamingResponse(generate(), media_type="text/plain")
 
 @app.delete("/history/{user_id}")
 async def clear_history(user_id: str):
     """Clear a user's chat history."""
-    if user_id in chat_histories:
-        del chat_histories[user_id]
+    if user_id in user_memories:
+        user_memories[user_id].reset()
+        del user_memories[user_id]
         return {"status": "ok", "message": f"History cleared for {user_id}"}
     return {"status": "ok", "message": f"No history found for {user_id}"}
+
+@app.get("/history/{user_id}")
+async def get_history(user_id: str):
+    """Get a user's chat history as a string."""
+    if user_id in user_memories:
+        return {"history": user_memories[user_id].get()}
+    return {"history": ""}
 
 @app.get("/models")
 async def list_models():
