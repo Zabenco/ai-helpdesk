@@ -1,4 +1,9 @@
 import os
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+load_dotenv()
+
 from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
