@@ -164,9 +164,8 @@ def build_index():
     print(f"[Ingest] Building vector index with chunk_size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP}...")
     print(f"[Ingest] Using embedding provider: {EMBED_PROVIDER}, model: {EMBED_MODEL_NAME}")
     
-    # Only setup embedding if not already done
-    if Settings.embed_model is None:
-        setup_embedding_model()
+    # Setup embedding model FIRST before any Settings.embed_model access
+    setup_embedding_model()
     
     index = VectorStoreIndex.from_documents(
         documents,
