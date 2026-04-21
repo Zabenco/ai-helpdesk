@@ -77,7 +77,7 @@ class CustomEmbedding(BaseEmbedding):
     def _get_text_embedding(self, text: str) -> list[float]:
         payload = {
             "model": self._model,
-            "input": text,
+            "texts": [text],
         }
         response = requests.post(
             f"{self._api_base}/embeddings",
@@ -90,40 +90,41 @@ class CustomEmbedding(BaseEmbedding):
         print(f"[Embed] Status: {response.status_code}, Response: {response.text[:500]}")
         response.raise_for_status()
         json_data = response.json()
-        if "data" not in json_data:
-            print(f"[Embed Error] Response missing 'data': {json_data}")
-            raise ValueError(f"Embedding API returned no data: {json_data}")
-        return json_data["data"][0]["embedding"]
+        # MiniMax returns {'vectors': [...], 'base_resp': {...}}
+        vectors = json_data.get("vectors")
+        if not vectors:
+            print(f"[Embed Error] Response missing vectors: {json_data}")
+            raise ValueError(f"Embedding API returned no vectors: {json_data}")
+        return vectors[0]
     
     async def _aget_text_embedding(self, text: str) -> list[float]:
         return self._get_text_embedding(text)
     
     def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
+        payload = {
+            "model": self._model,
+            "texts": texts,
+        }
         response = requests.post(
             f"{self._api_base}/embeddings",
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": self._model,
-                "input": texts,
-            },
+            json=payload,
         )
-        
-        # Debug: print status and response on error
+
         if response.status_code != 200:
             print(f"[Embed Error] Status: {response.status_code}")
             print(f"[Embed Error] Response: {response.text}")
             response.raise_for_status()
-        
+
         json_data = response.json()
-        if "data" not in json_data:
-            print(f"[Embed Error] Response missing 'data': {json_data}")
-            raise ValueError(f"Embedding API returned no data: {json_data}")
-        
-        data = json_data["data"]
-        return [d["embedding"] for d in sorted(data, key=lambda x: x["index"])]
+        vectors = json_data.get("vectors")
+        if not vectors:
+            print(f"[Embed Error] Response missing vectors: {json_data}")
+            raise ValueError(f"Embedding API returned no vectors: {json_data}")
+        return [v for v in vectors]
     
     async def _aget_text_embeddings(self, texts: list[str]) -> list[list[float]]:
         return self._get_text_embeddings(texts)
