@@ -46,8 +46,8 @@ app = FastAPI(title="Universal AI Assistant")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["https://ai-frontend-fbc5f.web.app", "http://localhost:5173"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
