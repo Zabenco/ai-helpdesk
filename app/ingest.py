@@ -75,17 +75,19 @@ class CustomEmbedding(BaseEmbedding):
         self._model = model
     
     def _get_text_embedding(self, text: str) -> list[float]:
+        payload = {
+            "model": self._model,
+            "input": text,
+        }
         response = requests.post(
             f"{self._api_base}/embeddings",
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": self._model,
-                "input": text,
-            },
+            json=payload,
         )
+        print(f"[Embed] Status: {response.status_code}, Response: {response.text[:500]}")
         response.raise_for_status()
         json_data = response.json()
         if "data" not in json_data:
