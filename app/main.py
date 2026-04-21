@@ -169,11 +169,34 @@ async def list_models():
         "available": get_available_providers(),
     }
 
+@app.get("/debug")
+async def debug_status():
+    """Return current state of docs and index directories."""
+    def list_dir(path):
+        if not os.path.exists(path):
+            return {"exists": False}
+        try:
+            items = os.listdir(path)
+            return {"exists": True, "files": items, "count": len(items)}
+        except Exception as e:
+            return {"exists": True, "error": str(e)}
+
+    return {
+        "index_dir": INDEX_DIR,
+        "index_status": list_dir(INDEX_DIR),
+        "docs_dir": DOCS_DIR,
+        "docs_status": list_dir(DOCS_DIR),
+        "index_loaded": index is not None,
+        "query_engine_ready": query_engine is not None,
+        "persistent_root": PERSISTENT_ROOT,
+    }
+
 @app.post("/upload")
 async def upload_files(files: list[UploadFile] = File(...)):
     """Receive new documents, save to docs/, and rebuild the index."""
     global index, query_engine
 
+    print(f"[UPLOAD] Starting. DOCS_DIR={DOCS_DIR}")
     os.makedirs(DOCS_DIR, exist_ok=True)
     saved = []
 
@@ -182,66 +205,90 @@ async def upload_files(files: list[UploadFile] = File(...)):
         content = await file.read()
         with open(dest, "wb") as f:
             f.write(content)
+        print(f"[UPLOAD] Saved: {file.filename}")
         saved.append(file.filename)
 
     if not saved:
         return {"message": "No files saved.", "files": []}
 
     try:
+        print("[UPLOAD] Calling build_index()...")
         build_index()
+        print("[UPLOAD] build_index complete. Loading index...")
         index = load_index()
         if index:
             llm = get_llm()
             query_engine = index.as_query_engine(llm=llm)
+            print("[UPLOAD] query_engine ready.")
         return {
             "message": f"Indexed {len(saved)} file(s). Index rebuilt.",
             "files": saved,
         }
     except Exception as e:
+        print(f"[UPLOAD] Error: {e}")
         return {"message": f"Files saved but re-index failed: {str(e)}", "files": saved}
 
 @app.post("/clear-index")
 async def clear_index():
-    """Delete all files in the index and docs folders, then reset the query engine."""
+    """Delete all files in the index folder and clear the docs folder."""
     global index, query_engine
 
     removed_index = []
     removed_docs = []
+    errors = []
+
+    print(f"[CLEAR] Starting. INDEX_DIR={INDEX_DIR}, DOCS_DIR={DOCS_DIR}")
 
     if os.path.exists(INDEX_DIR):
         for fname in os.listdir(INDEX_DIR):
             fpath = os.path.join(INDEX_DIR, fname)
-            if os.path.isfile(fpath):
-                os.remove(fpath)
-                removed_index.append(fname)
-            elif os.path.isdir(fpath):
-                shutil.rmtree(fpath)
-                removed_index.append(fname + "/")
+            try:
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+                    removed_index.append(fname)
+                    print(f"[CLEAR] Removed file: {fname}")
+                elif os.path.isdir(fpath):
+                    shutil.rmtree(fpath)
+                    removed_index.append(fname + "/")
+                    print(f"[CLEAR] Removed dir: {fname}/")
+            except Exception as e:
+                errors.append(f"{fname}: {str(e)}")
+                print(f"[CLEAR] Error removing {fname}: {e}")
+    else:
+        print(f"[CLEAR] INDEX_DIR does not exist: {INDEX_DIR}")
 
     if os.path.exists(DOCS_DIR):
         for fname in os.listdir(DOCS_DIR):
             fpath = os.path.join(DOCS_DIR, fname)
-            if os.path.isfile(fpath):
-                os.remove(fpath)
-                removed_docs.append(fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+                    removed_docs.append(fname)
+                    print(f"[CLEAR] Removed doc: {fname}")
+            except Exception as e:
+                errors.append(f"doc:{fname}: {str(e)}")
+                print(f"[CLEAR] Error removing doc {fname}: {e}")
+    else:
+        print(f"[CLEAR] DOCS_DIR does not exist: {DOCS_DIR}")
 
     index = None
     query_engine = None
+    print(f"[CLEAR] Done. index={index}, query_engine={query_engine}")
 
     return {
-        "message": "Index and docs cleared.",
+        "message": "Index and docs cleared." + (" Errors: " + ", ".join(errors) if errors else ""),
         "index_removed": removed_index,
         "docs_removed": removed_docs,
+        "errors": errors,
+        "paths": {"index_dir": INDEX_DIR, "docs_dir": DOCS_DIR},
     }
 
 # Import at bottom to avoid circular import
 from app.overrides import get_override_for_question
 
-# Path to docs directory (project root / docs)
+# Path configuration — use persistent disk on Render
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-
-# Persistent disk mount on Render (or local fallback)
 PERSISTENT_ROOT = os.environ.get("PERSISTENT_ROOT", PROJECT_ROOT)
 
 DOCS_DIR = os.path.join(PERSISTENT_ROOT, "docs")
