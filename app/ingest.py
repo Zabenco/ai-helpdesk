@@ -31,7 +31,7 @@ EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "ollama")
 EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "nomic-embed-text")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
-MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimax.chat/v1")
+MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimax.io/v1")
 
 
 class CustomEmbedding(BaseEmbedding):
