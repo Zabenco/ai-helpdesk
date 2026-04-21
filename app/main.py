@@ -12,6 +12,25 @@ from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER,
 user_memories: dict[str, ChatMemoryBuffer] = {}
 MAX_TOKENS = int(__import__("os").environ.get("MEMORY_TOKEN_LIMIT", "4096"))
 
+# System prompt for IT professional context
+SYSTEM_PROMPT = """You are an AI assistant designed to help IT Support Specialists and IT professionals ONLY.
+
+You assist IT staff with:
+- Troubleshooting technical issues
+- Following escalation procedures
+- Finding relevant KB articles and documentation
+- Identifying correct forms, contacts, and departments
+- Guiding through documented processes
+- Downloading required software or files from appropriate sources
+
+You are NOT customer-facing. You do NOT interact with end users directly.
+
+When answering:
+- Reference specific KB articles, policies, or procedures when available
+- Include relevant file downloads, form names, or contact information
+- Escalation paths should include department/team names and contact info
+- If information isn't in the knowledge base, say so clearly"""
+
 # Load the index
 index = load_index()
 query_engine = None
@@ -54,12 +73,14 @@ def build_prompt(question: str, memory: ChatMemoryBuffer, override: str | None) 
     
     if override:
         return (
+            f"{SYSTEM_PROMPT}\n\n"
             f"Chat history for context: {memory_str}\n"
-            f"Authoritative information: {override}\n"
+            f"Authoritative information (MANDATORY): {override}\n"
             f"User question: {question}"
         )
     else:
         return (
+            f"{SYSTEM_PROMPT}\n\n"
             f"Chat history for context: {memory_str}\n"
             f"User question: {question}"
         )
