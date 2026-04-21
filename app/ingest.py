@@ -156,13 +156,10 @@ def setup_embedding_model():
         from llama_index.embeddings.ollama import OllamaEmbedding
         Settings.embed_model = OllamaEmbedding(model_name=EMBED_MODEL_NAME)
     elif EMBED_PROVIDER == "openai":
-        # Use MiniMax API if key is set, otherwise falls back to OpenAI
-        api_key = MINIMAX_API_KEY or OPENAI_API_KEY
-        api_base = MINIMAX_API_BASE if MINIMAX_API_KEY else "https://api.openai.com/v1"
-        Settings.embed_model = CustomEmbedding(
-            api_key=api_key,
-            api_base=api_base,
+        from llama_index.embeddings.openai import OpenAIEmbedding
+        Settings.embed_model = OpenAIEmbedding(
             model=EMBED_MODEL_NAME,
+            api_key=OPENAI_API_KEY,
         )
     else:
         raise ValueError(f"Unknown EMBED_PROVIDER: {EMBED_PROVIDER}")
