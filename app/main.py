@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.base.llms.types import ChatMessage
 import os
+import shutil
 
 from app.ingest import load_index, build_index, setup_embedding_model
 from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER, DEFAULT_MODEL_NAME
@@ -69,9 +70,7 @@ def get_memory(user_id: str) -> ChatMemoryBuffer:
 
 def build_prompt(question: str, memory: ChatMemoryBuffer, override: str | None) -> str:
     """Build the prompt with memory context and override."""
-    # Get relevant chat history from memory buffer
     memory_str = memory.get()
-    
     if override:
         return (
             f"{SYSTEM_PROMPT}\n\n"
@@ -102,11 +101,9 @@ async def ask(request: AskRequest):
 
     prompt = build_prompt(question=request.question, memory=memory, override=override)
 
-    # Full response collected
     response = query_engine.query(prompt)
     answer_text = str(response)
 
-    # Store the conversation in memory
     memory.put(ChatMessage(role="user", content=request.question))
     memory.put(ChatMessage(role="assistant", content=answer_text))
 
@@ -135,13 +132,11 @@ async def ask_stream(request: AskRequest):
 
     async def generate():
         full_response = ""
-        # Stream the response
         streaming_response = query_engine.query(prompt, stream=True)
         async for chunk in streaming_response.response_gen:
             full_response += str(chunk)
             yield chunk
 
-        # Store the conversation in memory after streaming completes
         memory.put(ChatMessage(role="user", content=request.question))
         memory.put(ChatMessage(role="assistant", content=full_response))
 
@@ -178,24 +173,22 @@ async def list_models():
 async def upload_files(files: list[UploadFile] = File(...)):
     """Receive new documents, save to docs/, and rebuild the index."""
     global index, query_engine
-    
+
     os.makedirs(DOCS_DIR, exist_ok=True)
     saved = []
-    
+
     for file in files:
         dest = os.path.join(DOCS_DIR, file.filename)
         content = await file.read()
         with open(dest, "wb") as f:
             f.write(content)
         saved.append(file.filename)
-    
+
     if not saved:
         return {"message": "No files saved.", "files": []}
-    
-    # Rebuild the index with all docs
+
     try:
         build_index()
-        # Reload the new index
         index = load_index()
         if index:
             llm = get_llm()
@@ -207,6 +200,40 @@ async def upload_files(files: list[UploadFile] = File(...)):
     except Exception as e:
         return {"message": f"Files saved but re-index failed: {str(e)}", "files": saved}
 
+@app.post("/clear-index")
+async def clear_index():
+    """Delete all files in the index and docs folders, then reset the query engine."""
+    global index, query_engine
+
+    removed_index = []
+    removed_docs = []
+
+    if os.path.exists(INDEX_DIR):
+        for fname in os.listdir(INDEX_DIR):
+            fpath = os.path.join(INDEX_DIR, fname)
+            if os.path.isfile(fpath):
+                os.remove(fpath)
+                removed_index.append(fname)
+            elif os.path.isdir(fpath):
+                shutil.rmtree(fpath)
+                removed_index.append(fname + "/")
+
+    if os.path.exists(DOCS_DIR):
+        for fname in os.listdir(DOCS_DIR):
+            fpath = os.path.join(DOCS_DIR, fname)
+            if os.path.isfile(fpath):
+                os.remove(fpath)
+                removed_docs.append(fname)
+
+    index = None
+    query_engine = None
+
+    return {
+        "message": "Index and docs cleared.",
+        "index_removed": removed_index,
+        "docs_removed": removed_docs,
+    }
+
 # Import at bottom to avoid circular import
 from app.overrides import get_override_for_question
 
@@ -214,3 +241,4 @@ from app.overrides import get_override_for_question
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
+INDEX_DIR = os.path.join(PROJECT_ROOT, "index")
