@@ -1,11 +1,12 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.base.llms.types import ChatMessage
+import os
 
-from app.ingest import load_index
+from app.ingest import load_index, build_index, setup_embedding_model
 from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER, DEFAULT_MODEL_NAME
 
 # Per-user chat memory buffers
@@ -173,5 +174,43 @@ async def list_models():
         "available": get_available_providers(),
     }
 
+@app.post("/upload")
+async def upload_files(files: list[UploadFile] = File(...)):
+    """Receive new documents, save to docs/, and rebuild the index."""
+    global index, query_engine
+    
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    saved = []
+    
+    for file in files:
+        dest = os.path.join(DOCS_DIR, file.filename)
+        content = await file.read()
+        with open(dest, "wb") as f:
+            f.write(content)
+        saved.append(file.filename)
+    
+    if not saved:
+        return {"message": "No files saved.", "files": []}
+    
+    # Rebuild the index with all docs
+    try:
+        build_index()
+        # Reload the new index
+        index = load_index()
+        if index:
+            llm = get_llm()
+            query_engine = index.as_query_engine(llm=llm)
+        return {
+            "message": f"Indexed {len(saved)} file(s). Index rebuilt.",
+            "files": saved,
+        }
+    except Exception as e:
+        return {"message": f"Files saved but re-index failed: {str(e)}", "files": saved}
+
 # Import at bottom to avoid circular import
 from app.overrides import get_override_for_question
+
+# Path to docs directory (project root / docs)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
