@@ -57,7 +57,7 @@ def get_llm(provider: str = DEFAULT_MODEL_PROVIDER, model: str = DEFAULT_MODEL_N
         from llama_index.llms.openai import OpenAI
         # MiniMax uses OpenAI-compatible API with MiniMax-M2.7 model
         return OpenAI(
-            model="MiniMax-M2.7",
+            model="gpt-4o-mini",
             api_key=MINIMAX_API_KEY,
             api_base=f"{MINIMAX_API_BASE}"
         )
