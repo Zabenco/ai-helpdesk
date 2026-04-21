@@ -190,7 +190,7 @@ async def debug_status():
         "docs_status": list_dir(DOCS_DIR),
         "index_loaded": index is not None,
         "query_engine_ready": query_engine is not None,
-        "persistent_root": PERSISTENT_ROOT,
+        "persistent_root": _MNT_BASE or "(not set)",
     }
 
 @app.post("/upload")
@@ -341,14 +341,31 @@ async def upload_index_zip(file: UploadFile = File(...)):
 # Import at bottom to avoid circular import
 from app.overrides import get_override_for_question
 
-# Path configuration — use persistent disk on Render
+# Path configuration — use persistent disk at /mnt/ when available and writable
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-PERSISTENT_ROOT = os.environ.get("PERSISTENT_ROOT", PROJECT_ROOT)
 
-# Ensure the data subdirectory exists and is writable
-_MNT_DATA = os.path.join(PERSISTENT_ROOT, "data")
-os.makedirs(_MNT_DATA, exist_ok=True)
+_MNT_BASE = os.environ.get("PERSISTENT_ROOT", "")
+
+def _get_data_dir():
+    """Return the writable data directory, creating it if needed."""
+    # Try persistent disk first if PERSISTENT_ROOT is set and /mnt is writable
+    if _MNT_BASE and _MNT_BASE.startswith("/mnt"):
+        data_dir = os.path.join(_MNT_BASE, "data")
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            # Test writeability
+            test_file = os.path.join(data_dir, ".write_test")
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+            return data_dir
+        except PermissionError:
+            pass
+    # Fallback to project directory (works on Render + local dev)
+    return PROJECT_ROOT
+
+_MNT_DATA = _get_data_dir()
 
 DOCS_DIR = os.path.join(_MNT_DATA, "docs")
 INDEX_DIR = os.path.join(_MNT_DATA, "index")

@@ -15,11 +15,28 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-# Persistent disk mount on Render (or local fallback)
-PERSISTENT_ROOT = os.environ.get("PERSISTENT_ROOT", PROJECT_ROOT)
+# Use persistent disk mount at /mnt/ when available and writable
+_MNT_BASE = os.environ.get("PERSISTENT_ROOT", "")
 
-DOCS_DIR = os.path.join(PERSISTENT_ROOT, "docs")
-INDEX_DIR = os.path.join(PERSISTENT_ROOT, "index")
+def _get_data_dir():
+    """Return the writable data directory."""
+    if _MNT_BASE and _MNT_BASE.startswith("/mnt"):
+        data_dir = os.path.join(_MNT_BASE, "data")
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            test_file = os.path.join(data_dir, ".write_test")
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+            return data_dir
+        except PermissionError:
+            pass
+    return PROJECT_ROOT
+
+_MNT_DATA = _get_data_dir()
+
+DOCS_DIR = os.path.join(_MNT_DATA, "docs")
+INDEX_DIR = os.path.join(_MNT_DATA, "index")
 
 # Chunking configuration
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "1024"))
