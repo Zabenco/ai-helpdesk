@@ -21,8 +21,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-index/
-*.index
 overrides.json
 .vscode/
 .idea/
