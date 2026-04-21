@@ -55,9 +55,9 @@ def get_llm(provider: str = DEFAULT_MODEL_PROVIDER, model: str = DEFAULT_MODEL_N
         if not MINIMAX_API_KEY:
             raise ValueError("MINIMAX_API_KEY environment variable not set")
         from llama_index.llms.openai import OpenAI
-        # MiniMax uses OpenAI-compatible API - use a known model name to bypass validation
+        # MiniMax uses OpenAI-compatible API with MiniMax-M2.7 model
         return OpenAI(
-            model="gpt-4o-mini",  # Use known model name, MiniMax will use its own model
+            model="MiniMax-M2.7",
             api_key=MINIMAX_API_KEY,
             api_base=f"{MINIMAX_API_BASE}"
         )
