@@ -346,5 +346,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 PERSISTENT_ROOT = os.environ.get("PERSISTENT_ROOT", PROJECT_ROOT)
 
-DOCS_DIR = os.path.join(PERSISTENT_ROOT, "docs")
-INDEX_DIR = os.path.join(PERSISTENT_ROOT, "index")
+# Ensure the data subdirectory exists and is writable
+_MNT_DATA = os.path.join(PERSISTENT_ROOT, "data")
+os.makedirs(_MNT_DATA, exist_ok=True)
+
+DOCS_DIR = os.path.join(_MNT_DATA, "docs")
+INDEX_DIR = os.path.join(_MNT_DATA, "index")
