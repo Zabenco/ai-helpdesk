@@ -240,5 +240,9 @@ from app.overrides import get_override_for_question
 # Path to docs directory (project root / docs)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
-INDEX_DIR = os.path.join(PROJECT_ROOT, "index")
+
+# Persistent disk mount on Render (or local fallback)
+PERSISTENT_ROOT = os.environ.get("PERSISTENT_ROOT", PROJECT_ROOT)
+
+DOCS_DIR = os.path.join(PERSISTENT_ROOT, "docs")
+INDEX_DIR = os.path.join(PERSISTENT_ROOT, "index")

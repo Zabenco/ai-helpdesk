@@ -1,7 +1,6 @@
 import os
 import requests
 from typing import Any
-from dotenv import load_dotenv
 from llama_index.core import (
     VectorStoreIndex,
     SimpleDirectoryReader,
@@ -16,11 +15,11 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-# Load .env file from project root
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+# Persistent disk mount on Render (or local fallback)
+PERSISTENT_ROOT = os.environ.get("PERSISTENT_ROOT", PROJECT_ROOT)
 
-DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
-INDEX_DIR = os.path.join(PROJECT_ROOT, "index")
+DOCS_DIR = os.path.join(PERSISTENT_ROOT, "docs")
+INDEX_DIR = os.path.join(PERSISTENT_ROOT, "index")
 
 # Chunking configuration
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "1024"))
