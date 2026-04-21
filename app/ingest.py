@@ -87,7 +87,11 @@ class CustomEmbedding(BaseEmbedding):
             },
         )
         response.raise_for_status()
-        return response.json()["data"][0]["embedding"]
+        json_data = response.json()
+        if "data" not in json_data:
+            print(f"[Embed Error] Response missing 'data': {json_data}")
+            raise ValueError(f"Embedding API returned no data: {json_data}")
+        return json_data["data"][0]["embedding"]
     
     async def _aget_text_embedding(self, text: str) -> list[float]:
         return self._get_text_embedding(text)
