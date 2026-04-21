@@ -1,3 +1,5 @@
+import zipfile
+import io
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -281,6 +283,59 @@ async def clear_index():
         "docs_removed": removed_docs,
         "errors": errors,
         "paths": {"index_dir": INDEX_DIR, "docs_dir": DOCS_DIR},
+    }
+
+@app.post("/upload-index-zip")
+async def upload_index_zip(file: UploadFile = File(...)):
+    """Receive a zip file containing pre-built index files and extract to INDEX_DIR."""
+    global index, query_engine
+    
+    if not file.filename.endswith(".zip"):
+        return {"error": "Must upload a .zip file"}
+    
+    print(f"[INDEX-ZIP] Receiving index zip: {file.filename}")
+    content = await file.read()
+    
+    os.makedirs(INDEX_DIR, exist_ok=True)
+    extracted = []
+    errors = []
+    
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            for member in zf.namelist():
+                # Skip directories and hidden files
+                if member.endswith("/") or member.startswith("."):
+                    continue
+                target = os.path.join(INDEX_DIR, member)
+                # Prevent zip slip
+                if not target.startswith(INDEX_DIR):
+                    errors.append(f"Unsafe path skipped: {member}")
+                    continue
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with zf.open(member) as src, open(target, "wb") as dst:
+                    dst.write(src.read())
+                extracted.append(member)
+                print(f"[INDEX-ZIP] Extracted: {member}")
+    except Exception as e:
+        print(f"[INDEX-ZIP] Error: {e}")
+        return {"error": f"Failed to extract zip: {str(e)}"}
+    
+    # Reload index
+    try:
+        index = load_index()
+        if index:
+            llm = get_llm()
+            query_engine = index.as_query_engine(llm=llm)
+            print("[INDEX-ZIP] Index reloaded successfully.")
+        else:
+            print("[INDEX-ZIP] load_index returned None.")
+    except Exception as e:
+        print(f"[INDEX-ZIP] Error reloading index: {e}")
+    
+    return {
+        "message": f"Extracted {len(extracted)} files to index.",
+        "extracted": extracted,
+        "errors": errors,
     }
 
 # Import at bottom to avoid circular import
