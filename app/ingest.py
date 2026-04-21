@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 from typing import Any
 from llama_index.core import (
     VectorStoreIndex,
@@ -75,28 +76,39 @@ class CustomEmbedding(BaseEmbedding):
         self._model = model
 
     def _get_text_embedding(self, text: str) -> list[float]:
-        payload = {
-            "model": self._model,
-            "texts": [text],
-            "type": "query",
-        }
-        response = requests.post(
-            f"{self._api_base}/embeddings",
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-        print(f"[Embed] Status: {response.status_code}, Response: {response.text[:500]}")
-        response.raise_for_status()
-        json_data = response.json()
-        # MiniMax returns {'vectors': [...], 'base_resp': {...}}
-        vectors = json_data.get("vectors")
-        if not vectors:
-            print(f"[Embed Error] Response missing vectors: {json_data}")
-            raise ValueError(f"Embedding API returned no vectors: {json_data}")
-        return vectors[0]
+        for attempt in range(3):
+            payload = {
+                "model": self._model,
+                "texts": [text],
+                "type": "query",
+            }
+            response = requests.post(
+                f"{self._api_base}/embeddings",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=15,
+            )
+            print(f"[Embed] Status: {response.status_code}, Response: {response.text[:500]}")
+            
+            if response.status_code == 200:
+                json_data = response.json()
+                vectors = json_data.get("vectors")
+                if vectors:
+                    return vectors[0]
+                status_msg = json_data.get("base_resp", {}).get("status_msg", "")
+            else:
+                status_msg = str(response.text)
+
+            if attempt < 2 and ("rate limit" in status_msg.lower() or "RPM" in status_msg or response.status_code == 429):
+                wait = 2 ** attempt
+                print(f"[Embed] Rate limited, waiting {wait}s before retry...")
+                time.sleep(wait)
+                continue
+            raise ValueError(f"Embedding API error: {response.status_code} {status_msg[:200]}")
+        raise ValueError("Embedding failed after 3 retries")
 
     async def _aget_text_embedding(self, text: str) -> list[float]:
         return self._get_text_embedding(text)
