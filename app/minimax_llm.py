@@ -1,24 +1,22 @@
-from typing import Any, Dict, Generator, Sequence
+from typing import Any, Generator, Iterator
 import requests
+import json
 from pydantic import PrivateAttr
 
 from llama_index.core.llms.custom import CustomLLM
 from llama_index.core.base.llms.types import (
     CompletionResponse,
     LLMMetadata,
-    ChatMessage,
     CompletionResponseGen,
 )
 
 
 class MiniMaxLLM(CustomLLM):
-    """Simple MiniMax LLM adapter using OpenAI-compatible HTTP endpoints.
+    """MiniMax LLM adapter using OpenAI-compatible HTTP endpoints.
 
-    This adapter bypasses client-side validation by calling the MiniMax
-    API directly via `requests`.
+    Supports both regular and streaming chat completions via MiniMax's SSE endpoint.
     """
 
-    # private attrs (pydantic)
     _api_key: str = PrivateAttr()
     _api_base: str = PrivateAttr()
     _model: str = PrivateAttr()
@@ -35,56 +33,80 @@ class MiniMaxLLM(CustomLLM):
     def metadata(self) -> LLMMetadata:
         return LLMMetadata(model_name=self._model, is_chat_model=True)
 
-    def _call_api(self, prompt: str) -> Dict[str, Any]:
+    def _post(self, messages: list, stream: bool = False) -> requests.Response:
         payload = {
             "model": self._model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
+            "stream": stream,
         }
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        if stream:
+            headers["Accept"] = "text/event-stream"
+
         r = requests.post(
             f"{self._api_base}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json=payload,
             timeout=self._timeout,
+            stream=stream,
         )
         r.raise_for_status()
-        return r.json()
+        return r
 
     def _complete(self, prompt: str, **kwargs: Any) -> CompletionResponse:
-        resp = self._call_api(prompt)
-        # Try to extract text from common OpenAI-compatible shapes
+        messages = [{"role": "user", "content": prompt}]
+        r = self._post(messages, stream=False)
+        resp = r.json()
         try:
             choice = resp["choices"][0]
-            # Some providers embed message in 'message' -> 'content'
             if isinstance(choice, dict) and "message" in choice:
                 text = choice["message"].get("content") or choice["message"].get("content_raw") or ""
             else:
                 text = choice.get("text", "")
         except Exception:
             text = ""
-
         return CompletionResponse(text=text, raw=resp, additional_kwargs={})
 
-    def _stream_complete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
-        # MiniMax streaming support isn't implemented here. Yield a single response
-        resp = self._call_api(prompt)
-        try:
-            choice = resp["choices"][0]
-            if isinstance(choice, dict) and "message" in choice:
-                text = choice["message"]["content"]
+    def _stream_iter(self, prompt: str) -> Iterator[str]:
+        """Yield text chunks from MiniMax's SSE streaming endpoint."""
+        messages = [{"role": "user", "content": prompt}]
+        r = self._post(messages, stream=True)
+
+        for line in r.iter_lines():
+            if not line:
+                continue
+            line = line.decode("utf-8") if isinstance(line, bytes) else line
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("data: "):
+                data = line[6:]
+            elif line.startswith("data:"):
+                data = line[5:]
             else:
-                text = choice.get("text", "")
-        except Exception:
-            text = ""
+                continue
+            if data == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data)
+                choices = chunk.get("choices", [])
+                if choices:
+                    delta = choices[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
+            except Exception:
+                continue
 
-        def gen():
-            yield CompletionResponse(text=text, raw=resp, additional_kwargs={})
-
+    def _stream_complete(self, prompt: str, **kwargs: Any) -> CompletionResponseGen:
+        def gen() -> Generator[CompletionResponse, None, None]:
+            for text in self._stream_iter(prompt):
+                yield CompletionResponse(text=text, raw={}, additional_kwargs={})
         return gen()
 
-    # Sync wrappers required by BaseLLM abstract interface
     def complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> CompletionResponse:
         return self._complete(prompt, **kwargs)
 
