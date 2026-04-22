@@ -1,5 +1,6 @@
 import zipfile
 import io
+import json
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -68,14 +69,56 @@ class ModelRequest(BaseModel):
     provider: str = DEFAULT_MODEL_PROVIDER
     model: str = DEFAULT_MODEL_NAME
 
+def _get_memory_path(user_id: str) -> str:
+    """Return path to a user's memory JSON file."""
+    return os.path.join(MEMORY_DIR, f"{user_id.replace('/', '_').replace(':', '_')}.json")
+
+def _save_memory(user_id: str, memory: ChatMemoryBuffer) -> None:
+    """Persist a user's memory buffer to disk."""
+    try:
+        os.makedirs(MEMORY_DIR, exist_ok=True)
+        # ChatMemoryBuffer stores messages via .messages attribute
+        msgs = []
+        try:
+            raw = memory.get_all()
+            if isinstance(raw, list):
+                msgs = [{"role": m.role.value if hasattr(m.role, 'value') else str(m.role), "content": m.content} for m in raw]
+        except Exception:
+            pass
+        path = _get_memory_path(user_id)
+        with open(path, "w") as f:
+            json.dump({"user_id": user_id, "messages": msgs}, f)
+    except Exception as e:
+        print(f"[MEMORY] Save error for {user_id}: {e}")
+
+def _load_memory(user_id: str) -> list[dict]:
+    """Load persisted memory messages for a user."""
+    try:
+        path = _get_memory_path(user_id)
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                data = json.load(f)
+                return data.get("messages", [])
+    except Exception as e:
+        print(f"[MEMORY] Load error for {user_id}: {e}")
+    return []
+
 def get_memory(user_id: str) -> ChatMemoryBuffer:
-    """Get or create a chat memory buffer for a user."""
+    """Get or create a chat memory buffer for a user, backed by disk persistence."""
     if user_id not in user_memories:
         llm = get_llm()
-        user_memories[user_id] = ChatMemoryBuffer.from_defaults(
+        memory = ChatMemoryBuffer.from_defaults(
             llm=llm,
             token_limit=MAX_TOKENS
         )
+        # Restore persisted messages
+        saved = _load_memory(user_id)
+        for msg in saved:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if content:
+                memory.put(ChatMessage(role=role, content=content))
+        user_memories[user_id] = memory
     return user_memories[user_id]
 
 def build_prompt(question: str, memory: ChatMemoryBuffer, override: str | None) -> str:
@@ -116,6 +159,7 @@ async def ask(request: AskRequest):
 
     memory.put(ChatMessage(role="user", content=request.question))
     memory.put(ChatMessage(role="assistant", content=answer_text))
+    _save_memory(request.user_id, memory)
 
     return {
         "question": request.question,
@@ -161,23 +205,35 @@ async def ask_stream(request: AskRequest):
 
         memory.put(ChatMessage(role="user", content=request.question))
         memory.put(ChatMessage(role="assistant", content=full_response))
+        _save_memory(request.user_id, memory)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.delete("/history/{user_id}")
 async def clear_history(user_id: str):
-    """Clear a user's chat history."""
+    """Clear a user's chat history from memory and disk."""
     if user_id in user_memories:
         user_memories[user_id].reset()
         del user_memories[user_id]
-        return {"status": "ok", "message": f"History cleared for {user_id}"}
-    return {"status": "ok", "message": f"No history found for {user_id}"}
+    # Also delete the persisted file
+    try:
+        path = _get_memory_path(user_id)
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+    return {"status": "ok", "message": f"History cleared for {user_id}"}
 
 @app.get("/history/{user_id}")
 async def get_history(user_id: str):
     """Get a user's chat history as a string."""
     if user_id in user_memories:
         return {"history": user_memories[user_id].get()}
+    # Try loading from disk if not in memory
+    saved = _load_memory(user_id)
+    if saved:
+        lines = [f"{m.get('role', 'user')}: {m.get('content', '')}" for m in saved]
+        return {"history": "\n".join(lines)}
     return {"history": ""}
 
 @app.get("/models")
@@ -369,10 +425,9 @@ _MNT_BASE = os.environ.get("PERSISTENT_ROOT", "")
 
 def _get_data_dir():
     """Return the writable data directory, creating it if needed."""
-    # Try persistent disk first if PERSISTENT_ROOT is set and /mnt is writable
-    if _MNT_BASE and _MNT_BASE.startswith("/mnt"):
-        data_dir = os.path.join(_MNT_BASE, "data")
+    if _MNT_BASE:
         try:
+            data_dir = _MNT_BASE
             os.makedirs(data_dir, exist_ok=True)
             # Test writeability
             test_file = os.path.join(data_dir, ".write_test")
@@ -389,3 +444,4 @@ _MNT_DATA = _get_data_dir()
 
 DOCS_DIR = os.path.join(_MNT_DATA, "docs")
 INDEX_DIR = os.path.join(_MNT_DATA, "index")
+MEMORY_DIR = os.path.join(_MNT_DATA, "memory")
