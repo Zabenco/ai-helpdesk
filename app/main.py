@@ -147,7 +147,7 @@ async def ask_stream(request: AskRequest):
         memory.put(ChatMessage(role="user", content=request.question))
         memory.put(ChatMessage(role="assistant", content=full_response))
 
-    return StreamingResponse(generate(), media_type="text/plain")
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.delete("/history/{user_id}")
 async def clear_history(user_id: str):
