@@ -199,7 +199,12 @@ async def ask_stream(request: AskRequest):
             yield str(streaming_response)
             return
         
-        # response_gen may be sync or async — handle both
+        # If the response_gen is a coroutine (from async stream_complete), await it first
+        import inspect
+        if inspect.iscoroutine(response_gen):
+            response_gen = await response_gen
+        
+        # Now iterate — may be sync generator or async generator
         try:
             async for chunk in response_gen:
                 full_response += str(chunk)
