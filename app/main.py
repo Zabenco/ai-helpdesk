@@ -143,7 +143,19 @@ async def ask_stream(request: AskRequest):
     async def generate():
         full_response = ""
         streaming_response = query_engine.query(prompt)
-        async for chunk in streaming_response.response_gen:
+        
+        # Get the response generator — different llama-index versions use different attribute names
+        response_gen = getattr(streaming_response, 'response_gen', None)
+        if response_gen is None:
+            response_gen = getattr(streaming_response, 'response_generator', None)
+        if response_gen is None:
+            response_gen = getattr(streaming_response, 'raw', None)
+        if response_gen is None:
+            # Last resort: treat the whole response as text
+            yield str(streaming_response)
+            return
+        
+        async for chunk in response_gen:
             full_response += str(chunk)
             yield chunk
 
