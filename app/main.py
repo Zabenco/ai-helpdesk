@@ -1,6 +1,7 @@
 import zipfile
 import io
 import json
+import re
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -204,7 +205,7 @@ async def ask_detailed(request: AskRequest):
 
     return {
         "question": request.question,
-        "answer_clean": answer_text.replace(/<think>[\s\S]*?<\/think>/g, '').strip(),
+        "answer_clean": re.sub(r"<think>[\s\S]*?<\/think>", "", answer_text).strip(),
         "answer_raw": answer_text,
         "override_used": bool(override),
         "sources": sources,
