@@ -1,220 +1,231 @@
-# Universal RAG System
+# AI Helpdesk — Intelligent IT Support Assistant
+
+A RAG-powered helpdesk that answers IT questions using your knowledge base. Built for SLU IT Support and deployable to production with minimal configuration.
 
 ## Features
 
-- **Document RAG (Retrieval-Augmented Generation)** - Searches your knowledge base and generates AI responses based on your documents
-- **Local AI Processing** - Uses Ollama with Llama3 for privacy-focused, offline AI responses
-- **Conversational Memory** - Maintains chat history for context-aware conversations
-- **Override System** - Priority responses for emergencies and special cases
-- **REST API** - FastAPI-based web service with automatic documentation
-- **Multi-user Support** - Separate conversation histories per user
-- **Multiple Document Types** - Supports PDF, TXT, MD, and CSV files
+- **RAG Q&A** — Answers questions by searching your indexed documents
+- **Multi-backend LLM** — Supports MiniMax (cloud), OpenAI, Anthropic, and Ollama (local)
+- **OpenAI Embeddings** — Fast, cheap, no rate limits for query embedding
+- **Per-user Chat Memory** — Conversation context persists across sessions
+- **Override System** — Priority responses for emergency keywords
+- **Admin Panel** — Upload docs, re-index, clear index, view user history (Firebase frontend)
+- **Multi-format Support** — PDF, TXT, MD, CSV, DOCX, PPTX, XLSX
+- **Deploy Ready** — Render + Firebase, persistent disk storage
 
+---
 
-## Let's get it started
+## Architecture
 
-### Prerequisites
-
-#### Quick note: Some computers cannot run this with llama3, make sure you have relatively good specifications and open resources, and maybe change the llm if need be
-
-1. **Install Ollama** (https://ollama.ai)
-2. **Download AI Models -I use Llama3-**:
-   ```bash
-   ollama pull llama3
-   ollama pull nomic-embed-text
-   ```
-3. **Python 3.8+** with pip
-
-### Installation
-
-1. **Clone and setup**:
-   ```bash
-   git clone https://github.com/Zabenco/ai-helpdesk.git
-   cd ai_helpdesk
-   python -m venv venv
-   ```
-
-2. **Activate virtual environment**:
-   ```bash
-   # Windows
-   venv\Scripts\Activate.ps1
-   
-   # Linux/Mac
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Setup Your Knowledge Base
-
-1. **Add documents** to the `docs/` folder (Currently inside the folder are demo docs, remove them):
-   ```
-   docs/
-   ├── company_policy.pdf
-   ├── troubleshooting_guide.txt
-   ├── faq.md
-   └── procedures.csv
-   ```
-
-2. **Have the AI read and index your decs** (Make sure you are inside your virtual environment:
-   ```bash
-   python app/ingest.py
-   ```
-
-### Run the Helpdesk
-
-1. **Start Ollama** (if not already running, also doesn't need to be in a virtual environment):
-   ```bash
-   ollama serve
-   ```
-
-2. **Start the API server**:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-3. **Open the interactive docs**:
-   - Visit: `http://localhost:8000/docs`
-   - Test your helpdesk right in the browser!
-
-## Usage Examples
-
-### Basic Question
-```json
-POST /ask
-{
-  "question": "How do I reset a password?",
-  "user_id": "john_doe"
-}
+```
+┌─────────────────────────────────────────────────────────┐
+│  Firebase Frontend (ai-frontend-fbc5f.web.app)          │
+│  React + Vite + Firebase Auth                           │
+└────────────────┬────────────────────────────────────────┘
+                 │  POST /ask, /upload, /clear-index
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│  Render Backend (ai-helpdesk-bqkv.onrender.com)         │
+│  FastAPI + LlamaIndex + RAG pipeline                    │
+│                                                          │
+│  Chat LLM:  MiniMax-M2.7 (or OpenAI/gpt-4o-mini)      │
+│  Embedding: OpenAI text-embedding-3-small               │
+│  Index:    Persistent disk at /mnt/data/index            │
+└─────────────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│  MiniMax API (chat)  +  OpenAI API (embeddings)         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Response
+---
+
+## Quick Start
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/Zabenco/ai-helpdesk.git
+cd ai-helpdesk
+```
+
+### 2. Set up environment variables
+
+Create a `.env` file in the project root:
+
+```bash
+# LLM (chat) — choose one
+LLM_PROVIDER=minimax      # cloud, uses MiniMax-M2.7
+LLM_MODEL=MiniMax-M2.7
+
+# OR for OpenAI chat:
+# LLM_PROVIDER=openai
+# LLM_MODEL=gpt-4o-mini
+
+# Embeddings (required for query-time retrieval)
+EMBED_PROVIDER=openai
+EMBED_MODEL=text-embedding-3-small
+OPENAI_API_KEY=sk-...
+
+# MiniMax (only needed if LLM_PROVIDER=minimax)
+MINIMAX_API_KEY=sk-cp-...
+MINIMAX_API_BASE=https://api.minimax.io/v1
+
+# Optional: local Ollama for dev (embeddings + chat offline)
+# EMBED_PROVIDER=ollama
+# LLM_PROVIDER=ollama
+# EMBED_MODEL=nomic-embed-text
+# LLM_MODEL=llama3
+```
+
+### 3. Install & ingest
+
+```bash
+pip install -r requirements.txt
+python -m app.ingest
+```
+
+### 4. Run
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 10000
+```
+
+Visit `http://localhost:8000/docs` for the interactive API docs.
+
+---
+
+## Document Ingest
+
+### Local ingest (dev)
+
+On your local machine, add docs to `docs/` then run:
+
+```bash
+python -m app.ingest
+```
+
+This builds the vector index using your configured embedder (OpenAI by default).
+
+### Production ingest (admin panel)
+
+Upload docs via the Admin → Upload Files tab in the Firebase frontend. The backend receives files, saves to `docs/`, and triggers a re-index automatically.
+
+### Pre-built index upload
+
+If you have a pre-built index (from local ingest), upload it via Admin → Upload Index Zip. Useful for migrating an index from local dev to production.
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/ask` | Ask a question, returns answer + sources |
+| `POST` | `/ask/stream` | Streaming response |
+| `GET` | `/history/{user_id}` | Get user's chat history |
+| `DELETE` | `/history/{user_id}` | Clear user's history |
+| `GET` | `/models` | List available LLM providers |
+| `GET` | `/debug` | Directory status, index state |
+| `POST` | `/upload` | Upload docs + auto re-index |
+| `POST` | `/upload-index-zip` | Upload pre-built index as zip |
+| `POST` | `/clear-index` | Wipe index + docs (admin) |
+
+### Example
+
+```bash
+curl -X POST https://ai-helpdesk-bqkv.onrender.com/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How do I reset a password?", "user_id": "ezabenco@gmail.com"}'
+```
+
 ```json
 {
   "question": "How do I reset a password?",
-  "answer": "To reset a password, follow these steps from our IT policy document...",
+  "answer": "To reset a password, follow these steps from the IT policy...",
   "override_used": false,
   "sources": [
     {
-      "file_name": "it_policy.pdf",
-      "file_path": "/docs/it_policy.pdf"
+      "file_name": "policies.txt",
+      "file_path": "D:\\Coding Projects\\ai-helpdesk\\docs\\policies.txt"
     }
   ]
 }
 ```
 
-### Follow-up Question (with memory)
-```json
-POST /ask
-{
-  "question": "What if that doesn't work?",
-  "user_id": "john_doe"
-}
-```
-
-The AI remembers the context of your previous password reset question!
+---
 
 ## Configuration
 
 ### Override System
 
-Create emergency or priority responses in `overrides.json`:
+Add priority responses in `overrides.json`:
 
 ```json
 {
-  "emergency": "EMERGENCY: Call 911 immediately!",
-  "password": "For password issues, contact IT at ext. 1234",
-  "server down": "Check the server status dashboard first: http://status.company.com"
+  "vaporized": "EMERGENCY: Follow the Unexpected Vaporization Procedure. Contact the Incident Commander immediately.",
+  "server down": "Check the server status dashboard and escalate to NOC."
 }
 ```
 
-When questions contain these keywords, the AI will prioritize these responses while still using document context.
+When a question contains an override keyword, that response is used with document context.
 
-### Supported File Types
+### Render Deployment
 
-- **PDF** - Text extraction from PDF documents
-- **TXT** - Plain text files
-- **MD** - Markdown documentation
-- **CSV** - Comma-separated data files
+On Render:
+- **Start command:** `uvicorn app.main:app --host 0.0.0.0 --port 10000`
+- **Build command:** `pip install -r requirements.txt`
+- **Disk:** Mount at `/mnt/` for persistent `docs/` and `index/` storage
+- **Env vars:** Set in Render dashboard — `OPENAI_API_KEY`, `EMBED_PROVIDER=openai`, `EMBED_MODEL=text-embedding-3-small`, `LLM_PROVIDER`, `LLM_MODEL`
 
-## API Endpoints
+### Firebase Frontend
 
-### `POST /ask`
-Ask a question to the AI
+Frontend repo: `https://github.com/Zabenco/ai-helpdesk-frontend`
 
-**Request Body:**
-- `question` (string): Your question
-- `user_id` (string, optional): User identifier for conversation memory
+Deployed at: `https://ai-frontend-fbc5f.web.app`
 
-**Response:**
-- `question`: Echo of your question
-- `answer`: AI-generated response
-- `override_used`: Whether an override was applied
-- `sources`: Documents used to generate the response
+Admin login required. Admin email: `ezabenco@gmail.com`
 
-### `GET /docs`
-Interactive API documentation (Swagger UI)
+---
 
-### `GET /redoc`
-Alternative API documentation (ReDoc)
+## Supported File Types
 
-## Development
+| Type | Extension | Notes |
+|------|-----------|-------|
+| Plain text | `.txt` | Direct read |
+| PDF | `.pdf` | Text extraction via pypdf |
+| Markdown | `.md` | Direct read |
+| CSV | `.csv` | Raw text (structured parsing TBD) |
+| Word | `.docx` | Via python-docx |
+| Excel | `.xlsx` | Via openpyxl |
+| PowerPoint | `.pptx` | Via python-pptx |
 
-### Adding New Features
-
-1. **New document types**: Modify `ingest.py` to add support for additional file formats, though a good chunk of files are already available
-2. **Custom prompts**: Edit the prompt templates in `main.py` depending on your preferences
-3. **Advanced overrides**: Enhance `overrides.py` for complex matching logic
-
-### Rebuilding the Index
-
-When you add or modify documents:
-```bash
-python app/ingest.py
-```
-
-## Privacy & Security
-
-- **Local Processing**: All AI processing happens on your machine
-- **No Data Transmission**: Your documents never leave your server or machine. Don't worry about big companies using your data for their learning models.
-- **CORS Enabled**: Configure `allow_origins` in `main.py` for production
-- **Offline Capable**: Works without internet after initial setup, given you have the knowledge base uploaded
-
-## Tech Stack
-
-- **[FastAPI](https://fastapi.tiangolo.com/)** - Modern web framework
-- **[LlamaIndex](https://www.llamaindex.ai/)** - RAG framework
-- **[Ollama](https://ollama.ai/)** - Local AI model serving
-- **[Pydantic](https://pydantic.dev/)** - Data validation
-- **[Uvicorn](https://www.uvicorn.org/)** - ASGI web server
+---
 
 ## Troubleshooting
 
-### Common Issues
+**"No index found"** — Run `python -m app.ingest` locally, or upload index via admin panel.
 
-**"No index loaded" error**:
-- Run `python app/ingest.py` to build the search index
+**Embedding errors / 401** — Verify `OPENAI_API_KEY` is set in Render env vars.
 
-**"Connection refused" to Ollama**:
-- Start Ollama: `ollama serve`
-- Verify models are installed: `ollama list`
+**Rate limits** — Use OpenAI embeddings (`EMBED_PROVIDER=openai`) instead of MiniMax embeddings.
 
-**Import errors**:
-- Ensure virtual environment is activated
-- Install missing packages within the virtual environment: `pip install -r requirements.txt`
+**CORS errors** — Backend allows `https://ai-frontend-fbc5f.web.app` and `http://localhost:5173`. Update `allow_origins` in `main.py` if adding new frontend origins.
 
-**Empty responses**:
-- Check that documents exist in `docs/` folder
-- Verify document formats are supported
+**Empty index after deploy** — Render disk is ephemeral on free tier. Use the Upload Index Zip feature or set `PERSISTENT_ROOT=/mnt/` with a persistent disk mount.
 
-### Performance Tips
+---
 
-- **RAM Usage**: Large document collections require more memory
-- **Response Time**: First query may be slow as models load
-- **Storage**: Vector index size depends on document count
+## Tech Stack
+
+- **[FastAPI](https://fastapi.tiangolo.com/)** — Web framework
+- **[LlamaIndex](https://www.llamaindex.ai/)** — RAG framework
+- **[MiniMax](https://platform.minimax.io/)** — Chat LLM (cloud)
+- **[OpenAI](https://openai.com/)** — Embeddings + optional chat
+- **[Ollama](https://ollama.ai/)** — Local dev LLM
+- **[Firebase](https://firebase.google.com/)** — Frontend hosting + auth
+- **[Render](https://render.com/)** — Backend hosting
 
 ---
 
