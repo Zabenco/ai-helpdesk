@@ -199,9 +199,16 @@ async def ask_stream(request: AskRequest):
             yield str(streaming_response)
             return
         
-        async for chunk in response_gen:
-            full_response += str(chunk)
-            yield chunk
+        # response_gen may be sync or async — handle both
+        try:
+            async for chunk in response_gen:
+                full_response += str(chunk)
+                yield chunk
+        except TypeError:
+            # Sync generator passed to async for — iterate synchronously
+            for chunk in response_gen:
+                full_response += str(chunk)
+                yield chunk
 
         memory.put(ChatMessage(role="user", content=request.question))
         memory.put(ChatMessage(role="assistant", content=full_response))
