@@ -164,8 +164,50 @@ async def ask(request: AskRequest):
     return {
         "question": request.question,
         "answer": answer_text,
+        "answer_raw": answer_text,  # includes <think> tags
         "override_used": bool(override),
         "sources": [node.metadata for node in response.source_nodes] if hasattr(response, 'source_nodes') else [],
+    }
+
+@app.post("/ask/detailed")
+async def ask_detailed(request: AskRequest):
+    """Non-streaming response with full metadata including think tags and sources."""
+    if not query_engine:
+        return {"error": "No index loaded. Run the ingest script first."}
+
+    print(f"[ASK/DETAILED] Question received: {request.question}")
+
+    memory = get_memory(request.user_id)
+    override = get_override_for_question(request.question)
+
+    if override:
+        print(f"[ASK/DETAILED] Override found and applied: {override}")
+
+    prompt = build_prompt(question=request.question, memory=memory, override=override)
+
+    response = query_engine.query(prompt)
+    answer_text = str(response)
+
+    memory.put(ChatMessage(role="user", content=request.question))
+    memory.put(ChatMessage(role="assistant", content=answer_text))
+    _save_memory(request.user_id, memory)
+
+    sources = []
+    if hasattr(response, 'source_nodes') and response.source_nodes:
+        for node in response.source_nodes:
+            sources.append({
+                "file_name": node.metadata.get('file_name', 'unknown'),
+                "page": node.metadata.get('page_label', node.metadata.get('page', 'N/A')),
+                "score": getattr(node, 'score', None),
+                "text_snippet": node.text[:200] if hasattr(node, 'text') else '',
+            })
+
+    return {
+        "question": request.question,
+        "answer_clean": answer_text.replace(/<think>[\s\S]*?<\/think>/g, '').strip(),
+        "answer_raw": answer_text,
+        "override_used": bool(override),
+        "sources": sources,
     }
 
 @app.post("/ask/stream")
@@ -238,15 +280,42 @@ async def clear_history(user_id: str):
 
 @app.get("/history/{user_id}")
 async def get_history(user_id: str):
-    """Get a user's chat history as a string."""
+    """Get a user's chat history as a string (legacy format)."""
     if user_id in user_memories:
         return {"history": user_memories[user_id].get()}
-    # Try loading from disk if not in memory
     saved = _load_memory(user_id)
     if saved:
         lines = [f"{m.get('role', 'user')}: {m.get('content', '')}" for m in saved]
         return {"history": "\n".join(lines)}
     return {"history": ""}
+
+@app.get("/history/{user_id}/full")
+async def get_full_history(user_id: str):
+    """Get a user's full conversation with metadata."""
+    history = []
+    # Get from in-memory memory
+    if user_id in user_memories:
+        try:
+            raw = user_memories[user_id].get_all()
+            if isinstance(raw, list):
+                for m in raw:
+                    history.append({
+                        "role": m.role.value if hasattr(m.role, 'value') else str(m.role),
+                        "content": m.content,
+                        "timestamp": getattr(m, 'created_at', None),
+                    })
+        except Exception:
+            pass
+    # Fill in from disk if not enough data
+    if len(history) == 0:
+        saved = _load_memory(user_id)
+        for m in saved:
+            history.append({
+                "role": m.get('role', 'user'),
+                "content": m.get('content', ''),
+                "timestamp": m.get('timestamp', None),
+            })
+    return {"history": history, "count": len(history)}
 
 @app.get("/models")
 async def list_models():
