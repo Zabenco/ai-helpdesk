@@ -40,7 +40,7 @@ index = load_index()
 query_engine = None
 if index:
     llm = get_llm()
-    query_engine = index.as_query_engine(llm=llm, streaming=True)
+    query_engine = index.as_query_engine(llm=llm)
 
 app = FastAPI(
     title="Universal AI Assistant",
