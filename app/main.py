@@ -35,12 +35,11 @@ When answering:
 - Escalation paths should include department/team names and contact info
 - If information isn't in the knowledge base, say so clearly"""
 
-# Load the index
 index = load_index()
 query_engine = None
 if index:
     llm = get_llm()
-    query_engine = index.as_query_engine(llm=llm)
+    query_engine = index.as_query_engine(llm=llm, streaming=True)
 
 app = FastAPI(
     title="Universal AI Assistant",
@@ -51,7 +50,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ai-frontend-fbc5f.web.app"],
+    allow_origins=[
+        "https://ai-frontend-fbc5f.web.app",
+        "https://ai.zaben.co",
+        "http://localhost:5173",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -139,7 +142,7 @@ async def ask_stream(request: AskRequest):
 
     async def generate():
         full_response = ""
-        streaming_response = query_engine.query(prompt, stream=True)
+        streaming_response = query_engine.query(prompt)
         async for chunk in streaming_response.response_gen:
             full_response += str(chunk)
             yield chunk
