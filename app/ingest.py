@@ -21,9 +21,9 @@ _MNT_BASE = os.environ.get("PERSISTENT_ROOT", "")
 
 def _get_data_dir():
     """Return the writable data directory."""
-    if _MNT_BASE and _MNT_BASE.startswith("/mnt"):
-        data_dir = os.path.join(_MNT_BASE, "data")
+    if _MNT_BASE:
         try:
+            data_dir = _MNT_BASE
             os.makedirs(data_dir, exist_ok=True)
             test_file = os.path.join(data_dir, ".write_test")
             with open(test_file, "w") as f:
