@@ -42,11 +42,16 @@ if index:
     llm = get_llm()
     query_engine = index.as_query_engine(llm=llm)
 
-app = FastAPI(title="Universal AI Assistant")
+app = FastAPI(
+    title="Universal AI Assistant",
+    docs_url=None,
+    redoc_url=None,
+    swagger_ui_oauth2_redirect_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ai-frontend-fbc5f.web.app", "http://localhost:5173"],
+    allow_origins=["https://ai-frontend-fbc5f.web.app"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
