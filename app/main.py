@@ -16,7 +16,7 @@ from app.config import get_llm, get_available_providers, DEFAULT_MODEL_PROVIDER,
 
 # Per-user chat memory buffers
 user_memories: dict[str, ChatMemoryBuffer] = {}
-MAX_TOKENS = int(__import__("os").environ.get("MEMORY_TOKEN_LIMIT", "4096"))
+MAX_TOKENS = int(os.environ.get("MEMORY_TOKEN_LIMIT", "64000"))
 
 # System prompt for IT professional context
 SYSTEM_PROMPT = """You are an AI assistant designed to help IT Support Specialists and IT professionals ONLY.
