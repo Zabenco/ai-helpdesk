@@ -78,7 +78,6 @@ def _save_memory(user_id: str, memory: ChatMemoryBuffer) -> None:
     """Persist a user's memory buffer to disk."""
     try:
         os.makedirs(MEMORY_DIR, exist_ok=True)
-        # ChatMemoryBuffer stores messages via .messages attribute
         msgs = []
         try:
             raw = memory.get_all()
@@ -104,6 +103,28 @@ def _load_memory(user_id: str) -> list[dict]:
         print(f"[MEMORY] Load error for {user_id}: {e}")
     return []
 
+def _load_history_text(user_id: str) -> str:
+    """Load full history from disk, bypassing the token limit."""
+    path = _get_memory_path(user_id)
+    if not os.path.exists(path):
+        return ""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        messages = data.get("messages", [])
+        if not messages:
+            return ""
+        lines = []
+        for m in messages:
+            role = m.get("role", "user").capitalize()
+            content = m.get("content", "").strip()
+            if content:
+                lines.append(f"{role}: {content}")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"[_HISTORY] Load error: {e}")
+        return ""
+
 def get_memory(user_id: str) -> ChatMemoryBuffer:
     """Get or create a chat memory buffer for a user, backed by disk persistence."""
     if user_id not in user_memories:
@@ -112,7 +133,6 @@ def get_memory(user_id: str) -> ChatMemoryBuffer:
             llm=llm,
             token_limit=MAX_TOKENS
         )
-        # Restore persisted messages
         saved = _load_memory(user_id)
         for msg in saved:
             role = msg.get("role", "user")
@@ -122,22 +142,25 @@ def get_memory(user_id: str) -> ChatMemoryBuffer:
         user_memories[user_id] = memory
     return user_memories[user_id]
 
-def build_prompt(question: str, memory: ChatMemoryBuffer, override: str | None) -> str:
-    """Build the prompt with memory context and override."""
-    memory_str = memory.get()
+def build_prompt(question: str, user_id: str, memory: ChatMemoryBuffer, override: str | None) -> str:
+    """Build prompt with full conversation history from disk (bypasses token limit)."""
+    history_text = _load_history_text(user_id)
+    # Fall back to memory buffer.get() if disk read is empty
+    if not history_text:
+        history_text = memory.get()
+
     if override:
         return (
             f"{SYSTEM_PROMPT}\n\n"
-            f"Chat history for context: {memory_str}\n"
-            f"Authoritative information (MANDATORY): {override}\n"
+            f"Full conversation history:\n{history_text}\n\n"
+            f"Authoritative information (MANDATORY): {override}\n\n"
             f"User question: {question}"
         )
-    else:
-        return (
-            f"{SYSTEM_PROMPT}\n\n"
-            f"Chat history for context: {memory_str}\n"
-            f"User question: {question}"
-        )
+    return (
+        f"{SYSTEM_PROMPT}\n\n"
+        f"Full conversation history:\n{history_text}\n\n"
+        f"User question: {question}"
+    )
 
 @app.post("/ask")
 async def ask(request: AskRequest):
@@ -153,7 +176,7 @@ async def ask(request: AskRequest):
     if override:
         print(f"[ASK] Override found and applied: {override}")
 
-    prompt = build_prompt(question=request.question, memory=memory, override=override)
+    prompt = build_prompt(question=request.question, user_id=request.user_id, memory=memory, override=override)
 
     response = query_engine.query(prompt)
     answer_text = str(response)
@@ -165,7 +188,7 @@ async def ask(request: AskRequest):
     return {
         "question": request.question,
         "answer": answer_text,
-        "answer_raw": answer_text,  # includes <think> tags
+        "answer_raw": answer_text,
         "override_used": bool(override),
         "sources": [node.metadata for node in response.source_nodes] if hasattr(response, 'source_nodes') else [],
     }
@@ -184,7 +207,7 @@ async def ask_detailed(request: AskRequest):
     if override:
         print(f"[ASK/DETAILED] Override found and applied: {override}")
 
-    prompt = build_prompt(question=request.question, memory=memory, override=override)
+    prompt = build_prompt(question=request.question, user_id=request.user_id, memory=memory, override=override)
 
     response = query_engine.query(prompt)
     answer_text = str(response)
@@ -225,35 +248,30 @@ async def ask_stream(request: AskRequest):
     if override:
         print(f"[ASK/STREAM] Override found and applied: {override}")
 
-    prompt = build_prompt(question=request.question, memory=memory, override=override)
+    prompt = build_prompt(question=request.question, user_id=request.user_id, memory=memory, override=override)
 
     async def generate():
         full_response = ""
         streaming_response = query_engine.query(prompt)
-        
-        # Get the response generator — different llama-index versions use different attribute names
+
         response_gen = getattr(streaming_response, 'response_gen', None)
         if response_gen is None:
             response_gen = getattr(streaming_response, 'response_generator', None)
         if response_gen is None:
             response_gen = getattr(streaming_response, 'raw', None)
         if response_gen is None:
-            # Last resort: treat the whole response as text
             yield str(streaming_response)
             return
-        
-        # If the response_gen is a coroutine (from async stream_complete), await it first
+
         import inspect
         if inspect.iscoroutine(response_gen):
             response_gen = await response_gen
-        
-        # Now iterate — may be sync generator or async generator
+
         try:
             async for chunk in response_gen:
                 full_response += str(chunk)
                 yield chunk
         except TypeError:
-            # Sync generator passed to async for — iterate synchronously
             for chunk in response_gen:
                 full_response += str(chunk)
                 yield chunk
@@ -270,7 +288,6 @@ async def clear_history(user_id: str):
     if user_id in user_memories:
         user_memories[user_id].reset()
         del user_memories[user_id]
-    # Also delete the persisted file
     try:
         path = _get_memory_path(user_id)
         if os.path.exists(path):
@@ -294,7 +311,6 @@ async def get_history(user_id: str):
 async def get_full_history(user_id: str):
     """Get a user's full conversation with metadata."""
     history = []
-    # Get from in-memory memory
     if user_id in user_memories:
         try:
             raw = user_memories[user_id].get_all()
@@ -307,7 +323,6 @@ async def get_full_history(user_id: str):
                     })
         except Exception:
             pass
-    # Fill in from disk if not enough data
     if len(history) == 0:
         saved = _load_memory(user_id)
         for m in saved:
@@ -330,74 +345,43 @@ async def list_models():
     }
 
 @app.get("/debug")
-async def debug_status():
-    """Return current state of docs and index directories."""
-    def list_dir(path):
-        if not os.path.exists(path):
-            return {"exists": False}
-        try:
-            items = os.listdir(path)
-            return {"exists": True, "files": items, "count": len(items)}
-        except Exception as e:
-            return {"exists": True, "error": str(e)}
-
+async def debug_info():
+    """Debug info about the backend."""
+    providers = get_available_providers()
+    llm = get_llm()
     return {
-        "index_dir": INDEX_DIR,
-        "index_status": list_dir(INDEX_DIR),
-        "docs_dir": DOCS_DIR,
-        "docs_status": list_dir(DOCS_DIR),
         "index_loaded": index is not None,
         "query_engine_ready": query_engine is not None,
-        "persistent_root": _MNT_BASE or "(not set)",
+        "llm_type": type(llm).__name__,
+        "llm_model": getattr(llm, 'model', DEFAULT_MODEL_NAME),
+        "available_providers": providers,
+        "max_tokens_from_env": MAX_TOKENS,
+        "data_dir": _MNT_DATA,
+        "index_dir": INDEX_DIR,
+        "memory_dir": MEMORY_DIR,
+        "docs_dir": DOCS_DIR,
     }
 
-@app.post("/upload")
-async def upload_files(files: list[UploadFile] = File(...)):
-    """Receive new documents, save to docs/, and rebuild the index."""
+@app.on_event("startup")
+async def startup_event():
+    """Load index and warm up the query engine on startup."""
     global index, query_engine
+    print("[STARTUP] Loading index...")
+    index = load_index()
+    if index:
+        llm = get_llm()
+        query_engine = index.as_query_engine(llm=llm)
+        print("[STARTUP] Index loaded and query engine ready.")
+    else:
+        print("[STARTUP] No index found — using empty knowledge base.")
 
-    print(f"[UPLOAD] Starting. DOCS_DIR={DOCS_DIR}")
-    os.makedirs(DOCS_DIR, exist_ok=True)
-    saved = []
-
-    for file in files:
-        dest = os.path.join(DOCS_DIR, file.filename)
-        content = await file.read()
-        with open(dest, "wb") as f:
-            f.write(content)
-        print(f"[UPLOAD] Saved: {file.filename}")
-        saved.append(file.filename)
-
-    if not saved:
-        return {"message": "No files saved.", "files": []}
-
-    try:
-        print("[UPLOAD] Calling build_index()...")
-        build_index()
-        print("[UPLOAD] build_index complete. Loading index...")
-        index = load_index()
-        if index:
-            llm = get_llm()
-            query_engine = index.as_query_engine(llm=llm)
-            print("[UPLOAD] query_engine ready.")
-        return {
-            "message": f"Indexed {len(saved)} file(s). Index rebuilt.",
-            "files": saved,
-        }
-    except Exception as e:
-        print(f"[UPLOAD] Error: {e}")
-        return {"message": f"Files saved but re-index failed: {str(e)}", "files": saved}
-
-@app.post("/clear-index")
-async def clear_index():
-    """Delete all files in the index folder and clear the docs folder."""
+@app.post("/clear")
+async def clear_all():
+    """Clear the in-memory index and docs directory (for re-ingest)."""
     global index, query_engine
-
     removed_index = []
     removed_docs = []
     errors = []
-
-    print(f"[CLEAR] Starting. INDEX_DIR={INDEX_DIR}, DOCS_DIR={DOCS_DIR}")
 
     if os.path.exists(INDEX_DIR):
         for fname in os.listdir(INDEX_DIR):
@@ -406,16 +390,10 @@ async def clear_index():
                 if os.path.isfile(fpath):
                     os.remove(fpath)
                     removed_index.append(fname)
-                    print(f"[CLEAR] Removed file: {fname}")
-                elif os.path.isdir(fpath):
-                    shutil.rmtree(fpath)
-                    removed_index.append(fname + "/")
-                    print(f"[CLEAR] Removed dir: {fname}/")
+                    print(f"[CLEAR] Removed index: {fname}")
             except Exception as e:
-                errors.append(f"{fname}: {str(e)}")
-                print(f"[CLEAR] Error removing {fname}: {e}")
-    else:
-        print(f"[CLEAR] INDEX_DIR does not exist: {INDEX_DIR}")
+                errors.append(f"index:{fname}: {str(e)}")
+                print(f"[CLEAR] Error removing index {fname}: {e}")
 
     if os.path.exists(DOCS_DIR):
         for fname in os.listdir(DOCS_DIR):
@@ -447,25 +425,23 @@ async def clear_index():
 async def upload_index_zip(file: UploadFile = File(...)):
     """Receive a zip file containing pre-built index files and extract to INDEX_DIR."""
     global index, query_engine
-    
+
     if not file.filename.endswith(".zip"):
         return {"error": "Must upload a .zip file"}
-    
+
     print(f"[INDEX-ZIP] Receiving index zip: {file.filename}")
     content = await file.read()
-    
+
     os.makedirs(INDEX_DIR, exist_ok=True)
     extracted = []
     errors = []
-    
+
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as zf:
             for member in zf.namelist():
-                # Skip directories and hidden files
                 if member.endswith("/") or member.startswith("."):
                     continue
                 target = os.path.join(INDEX_DIR, member)
-                # Prevent zip slip
                 if not target.startswith(INDEX_DIR):
                     errors.append(f"Unsafe path skipped: {member}")
                     continue
@@ -477,8 +453,7 @@ async def upload_index_zip(file: UploadFile = File(...)):
     except Exception as e:
         print(f"[INDEX-ZIP] Error: {e}")
         return {"error": f"Failed to extract zip: {str(e)}"}
-    
-    # Reload index
+
     try:
         index = load_index()
         if index:
@@ -489,7 +464,7 @@ async def upload_index_zip(file: UploadFile = File(...)):
             print("[INDEX-ZIP] load_index returned None.")
     except Exception as e:
         print(f"[INDEX-ZIP] Error reloading index: {e}")
-    
+
     return {
         "message": f"Extracted {len(extracted)} files to index.",
         "extracted": extracted,
@@ -511,7 +486,6 @@ def _get_data_dir():
         try:
             data_dir = _MNT_BASE
             os.makedirs(data_dir, exist_ok=True)
-            # Test writeability
             test_file = os.path.join(data_dir, ".write_test")
             with open(test_file, "w") as f:
                 f.write("test")
@@ -519,7 +493,6 @@ def _get_data_dir():
             return data_dir
         except PermissionError:
             pass
-    # Fallback to project directory (works on Render + local dev)
     return PROJECT_ROOT
 
 _MNT_DATA = _get_data_dir()
