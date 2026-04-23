@@ -232,11 +232,15 @@ def build_index():
 def load_index():
     """Load the existing vector index."""
     if not os.path.exists(INDEX_DIR):
-        print("[Ingest] No index found. Run 'build_index()' first.")
+        print("[Ingest] No index directory found. Run 'build_index()' first.")
+        return None
+
+    docstore_path = os.path.join(INDEX_DIR, "docstore.json")
+    if not os.path.exists(docstore_path):
+        print(f"[Ingest] No docstore.json found in index dir — index not built yet or corrupted. Run 'build_index()' first.")
         return None
 
     print("[Ingest] Loading index from disk...")
-    # Ensure embed model is set before loading (needed for re-embedding on load)
     setup_embedding_model()
     storage_context = StorageContext.from_defaults(persist_dir=INDEX_DIR)
     return load_index_from_storage(storage_context)
