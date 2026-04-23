@@ -429,6 +429,11 @@ async def startup_event():
     else:
         print("[STARTUP] No index found — using empty knowledge base.")
 
+@app.post("/clear-index")
+async def clear_index():
+    """Alias for /clear — clears index and docs directory."""
+    return await clear_all()
+
 @app.post("/clear")
 async def clear_all():
     """Clear the in-memory index and docs directory (for re-ingest)."""
