@@ -41,7 +41,7 @@ index = load_index()
 query_engine = None
 if index:
     llm = get_llm()
-    query_engine = index.as_query_engine(llm=llm, response_mode="simple")
+    query_engine = index.as_query_engine(llm=llm)
 
 app = FastAPI(
     title="Universal AI Assistant",
@@ -103,8 +103,11 @@ def _load_memory(user_id: str) -> list[dict]:
         print(f"[MEMORY] Load error for {user_id}: {e}")
     return []
 
+# Max history chars fed into the prompt (keeps room for system prompt + retrieved context + response)
+MAX_HISTORY_CHARS = 25000
+
 def _load_history_text(user_id: str) -> str:
-    """Load full history from disk, bypassing the token limit."""
+    """Load history from disk, truncated to MAX_HISTORY_CHARS to avoid context overflow."""
     path = _get_memory_path(user_id)
     if not os.path.exists(path):
         return ""
@@ -120,7 +123,12 @@ def _load_history_text(user_id: str) -> str:
             content = m.get("content", "").strip()
             if content:
                 lines.append(f"{role}: {content}")
-        return "\n".join(lines)
+        full_text = "\n".join(lines)
+        # Truncate to avoid context overflow in the LLM prompt
+        if len(full_text) > MAX_HISTORY_CHARS:
+            full_text = full_text[-MAX_HISTORY_CHARS:]
+            full_text = "... [earlier conversation truncated] ...\n\n" + full_text
+        return full_text
     except Exception as e:
         print(f"[_HISTORY] Load error: {e}")
         return ""
@@ -370,7 +378,7 @@ async def startup_event():
     index = load_index()
     if index:
         llm = get_llm()
-        query_engine = index.as_query_engine(llm=llm, response_mode="simple")
+        query_engine = index.as_query_engine(llm=llm)
         print("[STARTUP] Index loaded and query engine ready.")
     else:
         print("[STARTUP] No index found — using empty knowledge base.")
@@ -458,7 +466,7 @@ async def upload_index_zip(file: UploadFile = File(...)):
         index = load_index()
         if index:
             llm = get_llm()
-            query_engine = index.as_query_engine(llm=llm, response_mode="simple")
+            query_engine = index.as_query_engine(llm=llm)
             print("[INDEX-ZIP] Index reloaded successfully.")
         else:
             print("[INDEX-ZIP] load_index returned None.")
