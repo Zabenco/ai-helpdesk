@@ -44,11 +44,11 @@ CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "1024"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "256"))
 
 # Embedding model configuration
-EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "ollama")
-EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "nomic-embed-text")
+# Priority: OpenAI (text-embedding-3-small, 1536 dims) > Ollama (nomic-embed-text, 768 dims)
+EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "openai")  # default to openai since that's what's on Render
+EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "text-embedding-3-small")  # 1536 dims
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
-MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimax.io/v1")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 
 class CustomEmbedding(BaseEmbedding):
@@ -152,17 +152,22 @@ class CustomEmbedding(BaseEmbedding):
 
 def setup_embedding_model():
     """Configure the embedding model based on provider."""
-    if EMBED_PROVIDER == "ollama":
-        from llama_index.embeddings.ollama import OllamaEmbedding
-        Settings.embed_model = OllamaEmbedding(model_name=EMBED_MODEL_NAME)
-    elif EMBED_PROVIDER == "openai":
+    if EMBED_PROVIDER == "openai":
         from llama_index.embeddings.openai import OpenAIEmbedding
+        if not OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY environment variable not set for OpenAI embeddings")
         Settings.embed_model = OpenAIEmbedding(
-            model=EMBED_MODEL_NAME,
+            model=EMBED_MODEL_NAME or "text-embedding-3-small",
             api_key=OPENAI_API_KEY,
         )
+    elif EMBED_PROVIDER == "ollama":
+        from llama_index.embeddings.ollama import OllamaEmbedding
+        Settings.embed_model = OllamaEmbedding(
+            model_name=EMBED_MODEL_NAME or "nomic-embed-text",
+            base_url=OLLAMA_BASE_URL,
+        )
     else:
-        raise ValueError(f"Unknown EMBED_PROVIDER: {EMBED_PROVIDER}")
+        raise ValueError(f"Unknown EMBED_PROVIDER: {EMBED_PROVIDER}. Use 'openai' or 'ollama'.")
 
 
 # Supported file extensions

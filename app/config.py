@@ -14,8 +14,11 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
 MINIMAX_API_BASE = os.environ.get("MINIMAX_API_BASE", "https://api.minimax.io/v1")
 
-# Embedding model (Ollama only for now)
-EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "nomic-embed-text")
+# Embedding model (shared between ingest and backend startup)
+EMBED_MODEL_NAME = os.environ.get("EMBED_MODEL", "text-embedding-3-small")
+EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "openai")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 
 def get_llm(provider: str = DEFAULT_MODEL_PROVIDER, model: str = DEFAULT_MODEL_NAME):
