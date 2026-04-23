@@ -1,0 +1,23 @@
+RAG IT Incident Report
+Incident ID: INC-2026-0422
+Severity: SEV-1
+Date: April 22, 2026
+
+Summary:
+Complete loss of connectivity to the primary production database (RDS PostgreSQL) in us-east-1, resulting in total downtime for the customer-facing web application.
+
+Timeline (EST):
+- 13:00: Datadog alerts triggered for high latency and connection timeouts to RDS.
+- 13:05: PagerDuty paged the On-Call Database Engineer.
+- 13:10: Statuspage updated to reflect application downtime.
+- 13:15: Investigation revealed a bad Terraform apply script accidentally modified the Security Group attached to the RDS instance, dropping port 5432 ingress from the EKS cluster.
+- 13:20: Security Group configuration rolled back via Terraform.
+- 13:25: Connectivity restored. Web application recovering.
+- 13:40: All systems green. Statuspage resolved.
+
+Root Cause:
+Human error during an infrastructure-as-code deployment. A misconfigured variable dropped the necessary ingress rules.
+
+Action Items:
+1. Implement stricter CI/CD pipeline checks for Terraform state changes affecting database security groups (Assigned to: DevOps).
+2. Require two-person approval for infrastructure changes applied to production environments (Assigned to: IT Director).

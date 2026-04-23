@@ -1,0 +1,27 @@
+RAG IT Department - Employee Onboarding Procedure
+Document ID: IT-PROC-001
+
+Purpose: Standardized process for provisioning new RAG employees.
+
+Phase 1: Pre-boarding (T-minus 7 days)
+1. HR submits New Hire Ticket in Jira Service Management.
+2. IT Automation script (PowerShell/Python) triggers via Okta Lifecycle Management.
+3. System provisions:
+   - Active Directory User Account
+   - Google Workspace Account (Mailbox setup)
+   - Slack account (Auto-assigned to default channels)
+4. Hardware Procurement:
+   - Software Engineers: 16-inch MacBook Pro (M3 Max, 64GB RAM)
+   - Other roles: 14-inch MacBook Pro or Dell Latitude 7440 based on role.
+5. Devices are enrolled in Jamf/Intune via Zero-Touch Deployment.
+
+Phase 2: Day One
+1. User receives hardware.
+2. Initial login requires Okta activation link sent to personal email.
+3. User must set up Okta Verify (MFA) immediately.
+4. User logs into device using Okta FastPass.
+
+Phase 3: Role-Based Access Control (RBAC)
+- All requests for specific AWS environments, GitHub org access, or production databases must be submitted via Jira and require Manager + Data Owner approval.
+
+Troubleshooting Note: If Okta sync fails, manually force sync via the Okta Admin Console -> Directory Integrations.

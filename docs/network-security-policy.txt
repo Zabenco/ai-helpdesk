@@ -1,0 +1,16 @@
+RAG Network Security & Acceptable Use Policy
+
+1. Virtual Private Network (VPN)
+All remote employees must connect to the Palo Alto GlobalProtect VPN when accessing internal resources, staging environments, or internal IP ranges. Split-tunneling is disabled for high-security roles.
+
+2. Access Logs & Auditing
+All network traffic through the VPN and corporate firewalls is logged and forwarded to our SIEM (Splunk) for anomaly detection.
+
+3. Guest Wi-Fi
+Visitors to RAG offices must use the 'RAG-Guest' SSID. This network is completely segregated from the corporate LAN ('RAG-Corp'). 'RAG-Corp' authenticates via 802.1X using machine certificates pushed via MDM.
+
+4. Incident Response
+If a network breach is suspected, immediately isolate the affected machine (CrowdStrike network containment) and escalate to the SecOps team via the #secops-critical Slack channel.
+
+5. Patch Management
+Network infrastructure (firewalls, switches, access points) are patched during the standard maintenance window: Sundays 02:00-04:00 AM EST.

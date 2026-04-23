@@ -1,0 +1,23 @@
+RAG IT Department - Employee Offboarding Procedure
+Document ID: IT-PROC-002
+
+Purpose: Secure and standardized process for employee departures.
+
+Phase 1: Notification & Preparation
+1. HR submits Offboarding Ticket in Jira with departure date and time.
+2. If termination is involuntary, HR will flag the ticket as "URGENT/IMMEDIATE" - Skip to Phase 2 immediately upon notification.
+
+Phase 2: Access Revocation (Automated via Okta)
+1. At the scheduled time, Okta lifecycle management suspends the user account.
+2. Active Directory account is disabled and moved to the "Terminated Users" OU.
+3. Google Workspace account password is changed, sessions revoked, and account suspended.
+4. AWS IAM Identity Center access is automatically cut off.
+5. All active sessions in Slack, Jira, Confluence, and Zoom are terminated.
+
+Phase 3: Data Retention & Hardware Recovery
+1. User's Google Drive ownership is transferred to their direct manager.
+2. Email routing is set up: incoming emails auto-reply with a standard departure message and forward to the manager for 30 days.
+3. IT sends a prepaid FedEx box to remote users for hardware return.
+4. Once hardware is received, it is wiped via Jamf/Intune and placed in inventory, or sent for e-waste recycling if past lifecycle (4 years).
+
+Checklist completion must be signed off by a Tier 2 Support Engineer.

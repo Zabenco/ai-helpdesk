@@ -1,0 +1,16 @@
+Jira Service Management - Ticket #IT-00256
+Status: IN PROGRESS
+Priority: Medium
+Assignee: Network Ops Team
+Reporter: Marcus Chen (Engineering)
+
+Description:
+Palo Alto GlobalProtect VPN is stuck on "Connecting" and then times out. Occurring since the macOS 14.4 update this morning.
+
+Work Log:
+[10:00 AM - Helpdesk T1]: Basic troubleshooting performed. Restarted app, cleared GP cache. Issue persists. Escalating to NetOps.
+[10:45 AM - NetOps]: Noticed an issue with the GlobalProtect client version 6.1.2 on macOS 14.4. 
+[11:00 AM - NetOps]: We need to push client version 6.1.3 via Jamf. 
+
+Next Steps:
+Pushing GP 6.1.3 update to affected users. Awaiting confirmation from Marcus if the update resolves the issue.

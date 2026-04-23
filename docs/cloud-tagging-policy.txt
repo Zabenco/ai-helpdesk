@@ -1,0 +1,16 @@
+RAG Cloud Resource Tagging Policy
+
+To maintain accurate billing, cost allocation, and security auditing, ALL resources deployed in AWS and Azure must follow this strict tagging convention. Resources deployed without required tags will be automatically terminated by our Cloud Custodian bot after 24 hours.
+
+Required Tags:
+1. Environment: (Must be one of: Production, Staging, QA, Development, Sandbox)
+2. Department: (e.g., Engineering, Marketing, IT, HR)
+3. Owner: (Email address of the individual or team distribution list responsible for the resource)
+4. Project: (Jira Project Key or internal project name)
+5. DataClassification: (Public, Internal, Confidential, Restricted)
+
+Example AWS CLI:
+aws ec2 create-tags --resources i-1234567890abcdef0 --tags Key=Environment,Value=Production Key=Department,Value=Engineering Key=Owner,Value=eng-ops@rag.com Key=Project,Value=RAG-Core Key=DataClassification,Value=Confidential
+
+Enforcement:
+Terraform modules have been updated to require these tags. Manual console creation should be avoided, but if necessary, tags must be applied at creation time.

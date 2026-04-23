@@ -1,0 +1,18 @@
+RAG IT Infrastructure - Server Patching Schedule & Procedures
+
+1. Cadence
+- Non-Production (Dev/QA/Staging): 2nd Tuesday of the month (Patch Tuesday) + 2 days.
+- Production: 3rd Saturday of the month, 01:00 - 04:00 AM EST.
+
+2. Process (Linux / AWS EC2)
+- Patching is handled via AWS Systems Manager (SSM) Patch Manager.
+- A pre-patch snapshot is automatically created for stateful instances.
+- Critical and High severity security updates are approved automatically.
+- Other updates require manual approval by the Infrastructure Lead.
+
+3. Process (Windows Servers)
+- Managed via Microsoft Endpoint Configuration Manager (MECM).
+- Servers are grouped into collections based on the application they host to prevent simultaneous reboots of clustered nodes.
+
+4. Out-of-Band (Zero-Day) Patching
+If a CVSS 9.0+ vulnerability is actively being exploited in the wild, the CISO can authorize an emergency out-of-band patch. Emergency patching requires an immediate communication to all stakeholders and overrides standard maintenance windows.

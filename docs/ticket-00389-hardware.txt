@@ -1,0 +1,17 @@
+Jira Service Management - Ticket #IT-00389
+Status: PENDING APPROVAL
+Priority: Low
+Assignee: Hardware Provisioning
+Reporter: Jessica Alba (Sales)
+
+Description:
+Requesting a secondary monitor for home office. Current setup is just the laptop screen, making it hard to manage multiple client spreadsheets and Zoom calls simultaneously.
+
+Requested Item: Dell 27" USB-C Hub Monitor (P2723DE)
+
+Work Log:
+[02:10 PM - Helpdesk]: Ticket received. 
+[02:15 PM - Helpdesk]: Tagged user's manager (@MichaelScott) for budget approval as per RAG equipment policy (WFH equipment requires departmental budget).
+
+Next Steps:
+Waiting on Manager approval. Once approved, we will ship directly via our CDW portal.

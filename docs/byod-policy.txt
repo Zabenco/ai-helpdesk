@@ -1,0 +1,18 @@
+RAG Bring Your Own Device (BYOD) Policy
+
+1. Scope
+This policy applies to all employees who use personal mobile devices (smartphones, tablets) to access corporate data, including email, Slack, and Google Workspace.
+
+2. Enrollment
+To access corporate resources on a personal device, the device must be enrolled in Microsoft Intune Mobile Application Management (MAM). We do not require full Mobile Device Management (MDM) for personal devices.
+
+3. Security Requirements
+- The device must have a lock screen PIN or biometric authentication enabled.
+- The device cannot be jailbroken or rooted.
+- The OS must be within the last two major versions (e.g., iOS 16 or 17; Android 13 or 14).
+
+4. Data Separation
+MAM creates a secure container for corporate apps. IT cannot see your personal apps, photos, or browsing history. IT can only wipe the corporate container if the device is lost or you leave the company.
+
+5. Support
+The Helpdesk provides limited support for BYOD. We ensure the MAM profile installs correctly and apps launch, but hardware or OS-level issues are the employee's responsibility.

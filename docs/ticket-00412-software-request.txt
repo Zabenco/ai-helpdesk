@@ -1,0 +1,17 @@
+Jira Service Management - Ticket #IT-00412
+Status: RESOLVED
+Priority: Low
+Assignee: Auto-Provisioning Bot
+Reporter: David Kim (Design)
+
+Description:
+I need a license for Figma Enterprise. I was just moved to the UX Core team and need to edit the main design systems.
+
+Work Log:
+[01:05 PM - System]: Ticket created.
+[01:06 PM - System]: Automated check verified David Kim is a member of AD Group 'UX-Design-Team'.
+[01:07 PM - System]: Added user to Okta Group 'App-Figma-Enterprise'.
+[01:08 PM - System]: Provisioning successful via SCIM. 
+[01:09 PM - System]: Resolved ticket and notified user.
+
+Resolution: Software provisioned automatically based on group membership.

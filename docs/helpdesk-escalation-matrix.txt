@@ -1,0 +1,19 @@
+RAG IT Service Desk - Escalation Matrix
+
+Tier 1 (Helpdesk)
+- Initial contact point (Slack #it-help, Jira portal).
+- Handles: Password resets, software installation requests (standard catalog), basic hardware troubleshooting, printer issues, standard access requests.
+- Goal: Resolve 70% of tickets at first contact.
+
+Tier 2 (Desktop Support / SysAdmin)
+- Escalations from T1.
+- Handles: Complex OS issues, VIP support (C-Suite), network connectivity issues, MDM (Jamf/Intune) troubleshooting, advanced SaaS application configuration.
+- SLA: 24-hour response time.
+
+Tier 3 (Infrastructure / Engineering)
+- Handles: Server outages, AWS/Cloud infrastructure issues, core network routing/firewall issues, identity provider (Okta/AD) systemic outages.
+- Escalate via: Jira -> Assign to specific engineering squad -> Page via PagerDuty if SEV-1/SEV-2.
+
+Tier 4 (Security / SecOps)
+- Handles: Phishing reports, malware detections, anomalous login activity, DLP (Data Loss Prevention) alerts.
+- T1 must immediately escalate any security concern without attempting resolution.

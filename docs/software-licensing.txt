@@ -1,0 +1,25 @@
+RAG Approved Software & Licensing Inventory
+
+Category: Development
+- JetBrains All Products Pack (Assigned via JetBrains Account, auto-revoked on termination)
+- GitHub Enterprise Copilot (Opt-in via IT ticket)
+- Docker Desktop (Business Tier, license managed via Jamf)
+
+Category: Design & Marketing
+- Adobe Creative Cloud (All Apps) - managed via Adobe Admin Console SSO.
+- Figma (Enterprise) - Auto-provisioned for Design team group in Okta.
+
+Category: IT & Ops
+- AWS Accounts (Consolidated Billing, Enterprise Support)
+- Datadog (Infrastructure monitoring, APM)
+- Terraform Cloud (Infrastructure as Code)
+- PagerDuty (On-call rotations)
+
+Category: General Productivity
+- Google Workspace (Enterprise)
+- Slack (Enterprise)
+- Notion (Enterprise - Deprecating Q4, migrating to Confluence)
+
+Prohibited Software:
+- Any unapproved generative AI tools that train on user input (Use internal RAG-AI portal instead).
+- Consumer file sharing (Dropbox, Box) - Use Google Drive only.

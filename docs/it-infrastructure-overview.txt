@@ -1,0 +1,36 @@
+RAG Corporate IT Infrastructure Overview
+Last Updated: April 2026
+
+1. Cloud Environment
+- Primary Provider: Amazon Web Services (AWS)
+- Multi-cloud presence: Microsoft Azure for Active Directory and specific legacy workloads
+- Architecture: Hybrid-cloud model with VPC peering between AWS regions (us-east-1, us-west-2).
+
+2. Servers & Compute
+- Production App Servers: Amazon EC2 (Linux - Amazon Linux 2023 & Ubuntu 24.04 LTS)
+- Containerization: Amazon EKS (Elastic Kubernetes Service) for microservices
+- Database Servers: Amazon RDS (PostgreSQL for transactional, DynamoDB for unstructured)
+- On-premise (Legacy): Dell PowerEdge R740 racks in our secondary datacenter running VMware ESXi.
+
+3. Identity and Access Management (IAM) & SSO
+- Directory Services: Microsoft Active Directory (Hybrid with Azure AD/Entra ID)
+- Single Sign-On (SSO): Okta is our primary SSO provider, integrated with Entra ID.
+- MFA: Enforced via Okta Verify or YubiKey hardware tokens for all staff.
+- Cloud IAM: AWS IAM Identity Center integrated with Okta. Principle of Least Privilege (PoLP) strictly enforced.
+
+4. Productivity & Collaboration
+- Office Suite: Google Workspace (Enterprise Plus)
+- Email: Gmail with Google Vault for retention
+- Communication: Slack (Enterprise Grid) for internal comms, Zoom for video conferencing
+- Project Management: Atlassian Jira and Confluence
+
+5. Endpoint Management
+- MDM: Jamf Pro for macOS devices, Microsoft Intune for Windows devices.
+- Antivirus/EDR: CrowdStrike Falcon
+- VPN: Palo Alto GlobalProtect
+
+6. Networking
+- SD-WAN: Cisco Meraki
+- DNS: Cloudflare
+
+This infrastructure supports our mission to provide innovative solutions and maintain our high-performance environment.

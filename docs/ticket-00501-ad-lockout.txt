@@ -1,0 +1,17 @@
+Jira Service Management - Ticket #IT-00501
+Status: RESOLVED
+Priority: High
+Assignee: Tier 1 Helpdesk
+Reporter: Emily Chen (Finance)
+
+Description:
+I am locked out of everything. I can't get into Windows on my laptop, and my phone says my email password is wrong.
+
+Work Log:
+[08:30 AM - Helpdesk]: Checked Active Directory. User account 'echen' is locked.
+[08:32 AM - Helpdesk]: Checked Splunk logs. Account was locked due to excessive failed authentications originating from the legacy RADIUS server used for the old office Wi-Fi.
+[08:35 AM - Helpdesk]: Called user on personal phone. Confirmed user changed their AD password yesterday. User's iPad at home is still trying to connect to the corporate Wi-Fi profile using the old password, triggering the lockout.
+[08:40 AM - Helpdesk]: Advised user to 'Forget' the network on their iPad. Unlocked AD account. Forced Okta sync.
+[08:45 AM - Helpdesk]: User successfully logged into Windows laptop.
+
+Resolution: Lockout caused by stale credentials on a secondary device. Account unlocked and device updated.
