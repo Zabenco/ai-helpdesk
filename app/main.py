@@ -487,8 +487,8 @@ async def upload_files(files: list[UploadFile] = File(...)):
     saved = []
     for file in files:
         safe_name = os.path.basename(file.filename or "unnamed")
-        # Prevent path traversal
-        safe_name = os.path.relpath(safe_name, "/").replace("../", "")
+        # Final safety: strip any directory components that survived basename
+        safe_name = safe_name.replace("/", "_").replace("\\", "_").replace("..", "")
         path = os.path.join(DOCS_DIR, safe_name)
         content = await file.read()
         with open(path, "wb") as f:
