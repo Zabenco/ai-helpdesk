@@ -186,8 +186,23 @@ async def ask(request: AskRequest):
 
     prompt = build_prompt(question=request.question, user_id=request.user_id, memory=memory, override=override)
 
-    response = query_engine.query(prompt)
-    answer_text = str(response)
+    # Try query engine first; fall back to direct LLM call if synthesizer overflows
+    try:
+        response = query_engine.query(prompt)
+        answer_text = str(response)
+        sources = [node.metadata for node in response.source_nodes] if hasattr(response, 'source_nodes') else []
+    except ValueError as e:
+        if "context size" in str(e).lower() or "non-negative" in str(e):
+            print(f"[ASK] Context overflow, falling back to direct LLM: {e}")
+            llm = get_llm()
+            try:
+                complete_response = llm.complete(prompt)
+                answer_text = complete_response.text if hasattr(complete_response, 'text') else str(complete_response)
+            except Exception:
+                answer_text = f"[Error generating response: {e}]"
+            sources = []
+        else:
+            raise
 
     memory.put(ChatMessage(role="user", content=request.question))
     memory.put(ChatMessage(role="assistant", content=answer_text))
@@ -198,7 +213,7 @@ async def ask(request: AskRequest):
         "answer": answer_text,
         "answer_raw": answer_text,
         "override_used": bool(override),
-        "sources": [node.metadata for node in response.source_nodes] if hasattr(response, 'source_nodes') else [],
+        "sources": sources,
     }
 
 @app.post("/ask/detailed")
@@ -217,22 +232,34 @@ async def ask_detailed(request: AskRequest):
 
     prompt = build_prompt(question=request.question, user_id=request.user_id, memory=memory, override=override)
 
-    response = query_engine.query(prompt)
-    answer_text = str(response)
+    try:
+        response = query_engine.query(prompt)
+        answer_text = str(response)
+        sources = []
+        if hasattr(response, 'source_nodes') and response.source_nodes:
+            for node in response.source_nodes:
+                sources.append({
+                    "file_name": node.metadata.get('file_name', 'unknown'),
+                    "page": node.metadata.get('page_label', node.metadata.get('page', 'N/A')),
+                    "score": getattr(node, 'score', None),
+                    "text_snippet": node.text[:200] if hasattr(node, 'text') else '',
+                })
+    except ValueError as e:
+        if "context size" in str(e).lower() or "non-negative" in str(e):
+            print(f"[ASK/DETAILED] Context overflow, falling back to direct LLM: {e}")
+            llm = get_llm()
+            try:
+                complete_response = llm.complete(prompt)
+                answer_text = complete_response.text if hasattr(complete_response, 'text') else str(complete_response)
+            except Exception:
+                answer_text = f"[Error generating response: {e}]"
+            sources = []
+        else:
+            raise
 
     memory.put(ChatMessage(role="user", content=request.question))
     memory.put(ChatMessage(role="assistant", content=answer_text))
     _save_memory(request.user_id, memory)
-
-    sources = []
-    if hasattr(response, 'source_nodes') and response.source_nodes:
-        for node in response.source_nodes:
-            sources.append({
-                "file_name": node.metadata.get('file_name', 'unknown'),
-                "page": node.metadata.get('page_label', node.metadata.get('page', 'N/A')),
-                "score": getattr(node, 'score', None),
-                "text_snippet": node.text[:200] if hasattr(node, 'text') else '',
-            })
 
     return {
         "question": request.question,
@@ -260,29 +287,48 @@ async def ask_stream(request: AskRequest):
 
     async def generate():
         full_response = ""
-        streaming_response = query_engine.query(prompt)
-
-        response_gen = getattr(streaming_response, 'response_gen', None)
-        if response_gen is None:
-            response_gen = getattr(streaming_response, 'response_generator', None)
-        if response_gen is None:
-            response_gen = getattr(streaming_response, 'raw', None)
-        if response_gen is None:
-            yield str(streaming_response)
-            return
-
-        import inspect
-        if inspect.iscoroutine(response_gen):
-            response_gen = await response_gen
-
         try:
-            async for chunk in response_gen:
-                full_response += str(chunk)
-                yield chunk
-        except TypeError:
-            for chunk in response_gen:
-                full_response += str(chunk)
-                yield chunk
+            streaming_response = query_engine.query(prompt)
+
+            response_gen = getattr(streaming_response, 'response_gen', None)
+            if response_gen is None:
+                response_gen = getattr(streaming_response, 'response_generator', None)
+            if response_gen is None:
+                response_gen = getattr(streaming_response, 'raw', None)
+            if response_gen is None:
+                yield str(streaming_response)
+                return
+
+            import inspect
+            if inspect.iscoroutine(response_gen):
+                response_gen = await response_gen
+
+            try:
+                async for chunk in response_gen:
+                    full_response += str(chunk)
+                    yield chunk
+            except TypeError:
+                for chunk in response_gen:
+                    full_response += str(chunk)
+                    yield chunk
+        except ValueError as e:
+            if "context size" in str(e).lower() or "non-negative" in str(e):
+                print(f"[ASK/STREAM] Context overflow, falling back to direct LLM streaming: {e}")
+                llm = get_llm()
+                try:
+                    stream_gen = llm.stream(prompt)
+                    import inspect
+                    if inspect.iscoroutine(stream_gen):
+                        stream_gen = await stream_gen
+                    for chunk in stream_gen:
+                        text = chunk.text if hasattr(chunk, 'text') else str(chunk)
+                        full_response += text
+                        yield text
+                except Exception as llm_err:
+                    yield f"[Error streaming response: {llm_err}]"
+            else:
+                yield f"[Error: {e}]"
+                return
 
         memory.put(ChatMessage(role="user", content=request.question))
         memory.put(ChatMessage(role="assistant", content=full_response))
