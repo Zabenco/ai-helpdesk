@@ -227,6 +227,7 @@ def build_index():
     index.storage_context.persist(persist_dir=INDEX_DIR)
 
     print("[Ingest] All done! Your helpdesk is ready.")
+    return index
 
 
 def load_index():
