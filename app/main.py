@@ -2,7 +2,7 @@ import zipfile
 import io
 import json
 import re
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -481,13 +481,67 @@ async def clear_all():
     }
 
 @app.post("/upload")
-async def upload_files(files: list[UploadFile] = File(...)):
-    """Receive documents and save them to the docs directory for later ingest."""
+async def upload_files(files: list[UploadFile] = File(...), background_tasks: BackgroundTasks = None):
+    """Receive documents (or a zip of documents) and save to docs directory.
+    If a zip is uploaded, extracts contents and triggers background index rebuild."""
     os.makedirs(DOCS_DIR, exist_ok=True)
     saved = []
+    is_zip = len(files) == 1 and (files[0].filename or "").lower().endswith(".zip")
+    
+    if is_zip:
+        zip_path = os.path.join(DOCS_DIR, "_upload.zip")
+        with open(zip_path, "wb") as f:
+            f.write(await files[0].read())
+        extracted = []
+        errors = []
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                for member in zf.namelist():
+                    if member.startswith(".") or member.endswith("/"):
+                        continue
+                    safe_name = os.path.basename(member).replace("/", "_").replace("\\", "_").replace("..", "")
+                    if not safe_name.strip():
+                        continue
+                    target = os.path.join(DOCS_DIR, safe_name)
+                    try:
+                        with zf.open(member) as src, open(target, "wb") as dst:
+                            dst.write(src.read())
+                        extracted.append(safe_name)
+                    except Exception as e:
+                        errors.append(f"{member}: {e}")
+                os.remove(zip_path)
+        except Exception as e:
+            return {"error": f"Failed to extract zip: {e}"}
+        
+        if background_tasks and extracted:
+            # Trigger background rebuild of the index
+            def _rebuild():
+                print("[UPLOAD] Zip extracted — triggering background index rebuild...")
+                global index, query_engine
+                try:
+                    index = build_index()
+                    if index:
+                        llm = get_llm()
+                        query_engine = index.as_query_engine(llm=llm)
+                        print("[UPLOAD] Background index rebuild complete.")
+                    else:
+                        print("[UPLOAD] Background rebuild returned None — no docs found.")
+                except Exception as e:
+                    print(f"[UPLOAD] Background rebuild error: {e}")
+            background_tasks.add_task(_rebuild)
+            return {
+                "message": f"Extracted {len(extracted)} files. Index rebuilding in background — available shortly.",
+                "files": extracted,
+                "errors": errors,
+            }
+        return {
+            "message": f"Extracted {len(extracted)} files.",
+            "files": extracted,
+            "errors": errors,
+        }
+    
     for file in files:
         safe_name = os.path.basename(file.filename or "unnamed")
-        # Final safety: strip any directory components that survived basename
         safe_name = safe_name.replace("/", "_").replace("\\", "_").replace("..", "")
         path = os.path.join(DOCS_DIR, safe_name)
         content = await file.read()
