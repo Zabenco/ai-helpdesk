@@ -41,7 +41,7 @@ index = load_index()
 query_engine = None
 if index:
     llm = get_llm()
-    query_engine = index.as_query_engine(llm=llm)
+    query_engine = index.as_query_engine(llm=llm, response_mode="simple")
 
 app = FastAPI(
     title="Universal AI Assistant",
@@ -370,7 +370,7 @@ async def startup_event():
     index = load_index()
     if index:
         llm = get_llm()
-        query_engine = index.as_query_engine(llm=llm)
+        query_engine = index.as_query_engine(llm=llm, response_mode="simple")
         print("[STARTUP] Index loaded and query engine ready.")
     else:
         print("[STARTUP] No index found — using empty knowledge base.")
@@ -458,7 +458,7 @@ async def upload_index_zip(file: UploadFile = File(...)):
         index = load_index()
         if index:
             llm = get_llm()
-            query_engine = index.as_query_engine(llm=llm)
+            query_engine = index.as_query_engine(llm=llm, response_mode="simple")
             print("[INDEX-ZIP] Index reloaded successfully.")
         else:
             print("[INDEX-ZIP] load_index returned None.")
