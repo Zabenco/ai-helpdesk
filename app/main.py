@@ -475,6 +475,23 @@ async def clear_all():
         "paths": {"index_dir": INDEX_DIR, "docs_dir": DOCS_DIR},
     }
 
+@app.post("/upload")
+async def upload_files(files: list[UploadFile] = File(...)):
+    """Receive documents and save them to the docs directory for later ingest."""
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    saved = []
+    for file in files:
+        safe_name = os.path.basename(file.filename or "unnamed")
+        # Prevent path traversal
+        safe_name = os.path.relpath(safe_name, "/").replace("../", "")
+        path = os.path.join(DOCS_DIR, safe_name)
+        content = await file.read()
+        with open(path, "wb") as f:
+            f.write(content)
+        saved.append(safe_name)
+        print(f"[UPLOAD] Saved: {safe_name}")
+    return {"message": f"Uploaded {len(saved)} files.", "files": saved}
+
 @app.post("/upload-index-zip")
 async def upload_index_zip(file: UploadFile = File(...)):
     """Receive a zip file containing pre-built index files and extract to INDEX_DIR."""
